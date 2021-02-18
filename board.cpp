@@ -1,31 +1,18 @@
-#include <iostream>
-#include <algorithm>
-#include <vector>
+#include "board.h"
 
-class Board {
-public:
-    Board(int start_player = 1);
-    void exec_move(int pos);
-    std::vector<int> get_moves() const;
-    std::pair<bool, int> get_result() const;
-    void display() const;
-private:
-    std::vector<std::vector<int>> states;
-    int n = 8;
-    int n_in_row = 5;
-    int cur_player;
-    int last_move = -1;
-};
-
-Board::Board(int start_player = 1) : cur_player(start_player) {
+Board::Board(int start_player) : cur_player(start_player) {
     states.resize(n);
     for (auto &vc : states) vc.resize(n);
 }
 
 void Board::exec_move(int pos) {
-    states[pos / n][pos % n] = cur_player;
+    exec_move(pos / n, pos % n);
+}
+
+void Board::exec_move(int x, int y) {
+    states[x][y] = cur_player;
     cur_player = -cur_player;
-    last_move = pos;
+    last_move = x * n + y;
 }
 
 std::vector<int> Board::get_moves() const {
@@ -71,7 +58,15 @@ std::pair<bool, int> Board::get_result() const {
             }
         }
     }
-    return {can_move, 0};
+    return {!can_move, 0};
+}
+
+bool Board::is_legal(int pos) const {
+    return is_legal(pos / n, pos % n);
+}
+
+bool Board::is_legal(int x, int y) const {
+    return states[x][y] == 0;
 }
 
 void Board::display() const {
