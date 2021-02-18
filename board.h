@@ -13,7 +13,7 @@ public:
     bool is_legal(int pos) const;
     bool is_legal(int x, int y) const;
     void display() const;
-    int get_cur_player() { return cur_player; }
+    int get_cur_player() const { return cur_player; }
 private:
     std::vector<std::vector<int>> states;
     int n = 8;

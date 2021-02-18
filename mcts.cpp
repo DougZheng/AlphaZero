@@ -1,23 +1,4 @@
 #include "mcts.h"
-#include "board.h"
-
-class Node {
-public:
-    friend class MCTS;
-    Node() = default;
-    Node(Node *par, double p);
-    std::pair<Node*, int> select(double c_puct) const;
-    void expand(const std::vector<double> &action_priors, const std::vector<int> &actions);
-    void backup(double value);
-    double get_value(double c_puct) const;
-    bool is_leaf() const;
-private:
-    Node *parent = nullptr;
-    std::vector<std::pair<Node*, int>> children;
-    int n_visit = 0;
-    double q_sa = 0;
-    double p_sa = 1;
-};
 
 Node::Node(Node *par, double p) : parent(par), p_sa(p) {
     
@@ -39,7 +20,7 @@ void Node::backup(double value) {
 
 std::pair<Node*, int> Node::select(double c_puct) const {
     return *max_element(children.cbegin(), children.cend(), 
-        [&](const auto &a, const auto &b) {
+        [&](const std::pair<Node*, int> &a, const std::pair<Node*, int> &b) {
             return a.first->get_value(c_puct) < b.first->get_value(c_puct);
         }); 
 }
@@ -52,20 +33,6 @@ double Node::get_value(double c_puct) const {
 bool Node::is_leaf() const {
     return children.empty();
 }
-
-class MCTS {
-public:
-    MCTS(int n = 4000);
-    ~MCTS();
-    void destroy(Node *root);
-    void playout(Board board);
-    int get_move(const Board &board);
-    std::pair<std::vector<double>, double> policy(Board &board);
-private:
-    Node *root = new Node(nullptr, 1.0);
-    double c_puct = 5;
-    int n_playout;
-};
 
 MCTS::MCTS(int n) : n_playout(n) {
 
@@ -108,7 +75,7 @@ int MCTS::get_move(const Board &board) {
         playout(board);
     }
     return max_element(root->children.cbegin(), root->children.cend(), 
-        [](const auto &a, const auto &b) {
+        [](const std::pair<Node*, int> &a, const std::pair<Node*, int> &b) {
             return a.first->n_visit < b.first->n_visit;
         })->second;
 }

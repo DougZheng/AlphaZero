@@ -1,4 +1,5 @@
 #include "game.h"
+#include "mcts.h"
 
 Game::Game() {
 
@@ -7,15 +8,24 @@ Game::Game() {
 void Game::run() {
     while (true) {
         board.display();
-        std::cout << "now for " << (board.get_cur_player() == 1 ? 'x' : 'o') << ": ";
-        int x, y;
-        std::cin >> x >> y;
-        while (!board.is_legal(x, y)) {
-            std::cin >> x >> y;
-        }
-        board.exec_move(x, y);
         auto res = board.get_result();
         if (res.first) break;
+        std::cout << "now for " << (board.get_cur_player() == 1 ? 'x' : 'o') << ": ";
+        if (board.get_cur_player() == 1) {
+            int x, y;
+            std::cin >> x >> y;
+            if (!board.is_legal(x, y)) {
+                std::cout << "not legal" << std::endl;
+                continue;
+            }
+            board.exec_move(x, y);
+        }
+        else {
+            std::cout << std::endl;
+            MCTS ai(4000);
+            int pos = ai.get_move(board);
+            board.exec_move(pos);
+        }
     }
 }
 
