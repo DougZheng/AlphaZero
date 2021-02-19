@@ -6,6 +6,8 @@
 #include <cmath>
 #include <utility>
 #include <iomanip>
+#include <random>
+#include <tuple>
 
 class Node {
 public:

@@ -36,14 +36,14 @@ std::pair<bool, int> Board::get_result() const {
                 can_move = true;
                 continue;
             } 
-            if (j <= n - n_in_row) {
-                int k;
-                for (k = 1; k < n_in_row && val == states[i][j + k]; ++k);
-                if (k == n_in_row) return {true, val};
-            }
             if (i <= n - n_in_row) {
                 int k;
                 for (k = 1; k < n_in_row && val == states[i + k][j]; ++k);
+                if (k == n_in_row) return {true, val};
+            }
+            if (j <= n - n_in_row) {
+                int k;
+                for (k = 1; k < n_in_row && val == states[i][j + k]; ++k);
                 if (k == n_in_row) return {true, val};
             }
             if (i <= n - n_in_row && j <= n - n_in_row) {
@@ -74,23 +74,31 @@ int Board::get_board_size() const {
 }
 
 void Board::display() const {
-    std::cout << std::endl;
+    int last_x = last_move != -1 ? last_move / n : n;
+    int last_y = last_move != -1 ? last_move % n : n;
+    std::cout << std::setfill('0') << std::endl;
     for (int i = -1; i < n; ++i) {
         for (int j = -1; j < n; ++j) {
             if (i == -1 && j == -1) {
-                std::cout << "  ";
+                std::cout << "    ";
             }
             else if (i == -1) {
-                std::cout << j << " \n"[j == n - 1];
+                std::cout << std::setw(2) << j << "  ";
             }
             else if (j == -1) {
-                std::cout << i << " "; 
+                std::cout << std::setw(2) << i << "   "; 
             }
             else{
                 char ch = states[i][j] == 0 ? '.' : states[i][j] == 1 ? 'x' : 'o';
-                std::cout << ch << " \n"[j == n - 1];
+                if (i == last_x && j == last_y) {
+                    std::cout << "\033[31;1m" << ch << "\033[0m" << "   ";
+                }
+                else{
+                    std::cout << ch << "   ";
+                }
             }
         }
+        std::cout << "\n\n";
     }
-    std::cout << std::endl;
+    std::cout << std::setfill(' ') << std::endl;
 }

@@ -65,7 +65,7 @@ void MCTS::playout(Board board) {
         cur->backup(-pi.second);
     }
     else {
-        double value = res.second == board.get_cur_player() ? 1 : -1;
+        double value = res.second == 0 ? 0 : res.second == board.get_cur_player() ? 1 : -1;
         cur->backup(-value);
     }
 }
@@ -87,8 +87,8 @@ std::pair<std::vector<double>, double> MCTS::policy(Board &board) {
     int player = board.get_cur_player();
     auto res = board.get_result();
     while (!res.first) {
-        std::random_shuffle(actions.begin(), actions.end());
-        board.exec_move(actions.back());
+        static std::mt19937 rnd(time(0));
+        board.exec_move(actions[rnd() % actions.size()]);
         actions = board.get_moves();
         res = board.get_result();
     }
@@ -98,15 +98,22 @@ std::pair<std::vector<double>, double> MCTS::policy(Board &board) {
 
 void MCTS::display(Node *root, const Board &board) const {
     int n = board.get_n();
-    std::vector<std::vector<double>> priors(n, std::vector<double>(n));
+    using tridouble = std::tuple<double, double, double>;
+    std::vector<std::vector<tridouble>> priors(n, std::vector<tridouble>(n));
     for (const auto &child : root->children) {
-        priors[child.second / n][child.second % n] = 1.0 * child.first->n_visit / root->n_visit;
+        priors[child.second / n][child.second % n] = std::make_tuple(
+            1.0 * child.first->n_visit / root->n_visit,
+            child.first->q_sa,
+            child.first->get_value(c_puct));
     }
-    std::cout << std::fixed << std::setprecision(3);
+    std::cout << std::fixed << std::setprecision(2);
     std::cout << std::endl;
     for (int i = 0; i < n; ++i) {
         for (int j = 0; j < n; ++j) {
-            std::cout << priors[i][j] << " \n"[j == n - 1];
+            std::cout << std::get<0>(priors[i][j]) 
+            << "(" << std::showpos << std::get<1>(priors[i][j]) << ","
+            << std::get<2>(priors[i][j]) << ")"
+            << std::noshowpos << " \n"[j == n - 1];
         }
     }
     std::cout << std::endl;
