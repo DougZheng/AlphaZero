@@ -69,11 +69,27 @@ bool Board::is_legal(int x, int y) const {
     return states[x][y] == 0;
 }
 
+int Board::get_board_size() const {
+    return n * n;
+}
+
 void Board::display() const {
-    for (int i = 0; i < n; ++i) {
-        for (int j = 0; j < n; ++j) {
-            char ch = states[i][j] == 0 ? '.' : states[i][j] == 1 ? 'x' : 'o';
-            std::cout << ch << " \n"[j == n - 1];
+    std::cout << std::endl;
+    for (int i = -1; i < n; ++i) {
+        for (int j = -1; j < n; ++j) {
+            if (i == -1 && j == -1) {
+                std::cout << "  ";
+            }
+            else if (i == -1) {
+                std::cout << j << " \n"[j == n - 1];
+            }
+            else if (j == -1) {
+                std::cout << i << " "; 
+            }
+            else{
+                char ch = states[i][j] == 0 ? '.' : states[i][j] == 1 ? 'x' : 'o';
+                std::cout << ch << " \n"[j == n - 1];
+            }
         }
     }
     std::cout << std::endl;

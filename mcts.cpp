@@ -74,6 +74,7 @@ int MCTS::get_move(const Board &board) {
     for (int i = 0; i < n_playout; ++i) {
         playout(board);
     }
+    // display(root, board);
     return max_element(root->children.cbegin(), root->children.cend(), 
         [](const std::pair<Node*, int> &a, const std::pair<Node*, int> &b) {
             return a.first->n_visit < b.first->n_visit;
@@ -82,7 +83,7 @@ int MCTS::get_move(const Board &board) {
 
 std::pair<std::vector<double>, double> MCTS::policy(Board &board) {
     auto actions = board.get_moves();
-    std::vector<double> action_probs(actions.size(), 1.0 / actions.size());
+    std::vector<double> action_probs(board.get_board_size(), 1.0 / actions.size());
     int player = board.get_cur_player();
     auto res = board.get_result();
     while (!res.first) {
@@ -93,4 +94,20 @@ std::pair<std::vector<double>, double> MCTS::policy(Board &board) {
     }
     double value = res.second == 0 ? 0 : res.second == player ? 1 : -1;
     return std::make_pair(action_probs, value);
+}
+
+void MCTS::display(Node *root, const Board &board) const {
+    int n = board.get_n();
+    std::vector<std::vector<double>> priors(n, std::vector<double>(n));
+    for (const auto &child : root->children) {
+        priors[child.second / n][child.second % n] = 1.0 * child.first->n_visit / root->n_visit;
+    }
+    std::cout << std::fixed << std::setprecision(3);
+    std::cout << std::endl;
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            std::cout << priors[i][j] << " \n"[j == n - 1];
+        }
+    }
+    std::cout << std::endl;
 }

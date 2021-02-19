@@ -14,9 +14,11 @@ public:
     bool is_legal(int x, int y) const;
     void display() const;
     int get_cur_player() const { return cur_player; }
+    int get_n() const { return n; }
+    int get_board_size() const;
 private:
     std::vector<std::vector<int>> states;
-    int n = 8;
+    int n = 10;
     int n_in_row = 5;
     int cur_player;
     int last_move = -1;

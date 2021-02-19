@@ -5,6 +5,7 @@
 #include <vector>
 #include <cmath>
 #include <utility>
+#include <iomanip>
 
 class Node {
 public:
@@ -32,6 +33,7 @@ public:
     void playout(Board board);
     int get_move(const Board &board);
     std::pair<std::vector<double>, double> policy(Board &board);
+    void display(Node *root, const Board &board) const;
 private:
     Node *root = new Node(nullptr, 1.0);
     double c_puct = 5;
