@@ -35,11 +35,11 @@ bool Node::is_leaf() const {
 
 MCTS::MCTS(int n_playout, double c_puct) : 
     n_playout(n_playout), c_puct(c_puct),
-    root(new Node(nullptr, 1.0), MCTS::destroy) { }
+    root(new Node(nullptr, 1.0), MCTS::tree_deleter) { }
 
-void MCTS::destroy(Node *root) {
+void MCTS::tree_deleter(Node *root) {
     for (auto &child : root->children) {
-        destroy(child.first);
+        tree_deleter(child.first);
     }
     delete root;
     root = nullptr;

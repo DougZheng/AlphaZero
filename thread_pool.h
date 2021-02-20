@@ -24,7 +24,7 @@ private:
     bool stop;
 };
 
-inline ThreadPool::ThreadPool(size_t thread_num) : stop(false) {
+ThreadPool::ThreadPool(size_t thread_num) : stop(false) {
     for (int i = 0; i < thread_num; ++i) {
         workers.emplace_back([this]() {
             while (true) {

@@ -30,13 +30,13 @@ private:
 class MCTS {
 public:
     MCTS(int n_playout, double c_puct = 5);
-    static void destroy(Node *root);
+    static void tree_deleter(Node *root);
     void playout(Board board);
     int get_move(const Board &board);
     std::pair<std::vector<double>, double> policy(Board &board);
     void display(Node *root, const Board &board) const;
 private:
-    std::unique_ptr<Node, decltype(MCTS::destroy)*> root;
+    std::unique_ptr<Node, decltype(MCTS::tree_deleter)*> root;
     double c_puct;
     int n_playout;
 };
