@@ -19,7 +19,7 @@ public:
     int get_board_size() const;
 private:
     std::vector<std::vector<int>> states;
-    int n = 8;
+    int n = 10;
     int n_in_row = 5;
     int cur_player;
     int last_move = -1;

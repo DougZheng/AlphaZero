@@ -87,7 +87,7 @@ std::pair<std::vector<double>, double> MCTS::policy(Board &board) {
     int player = board.get_cur_player();
     auto res = board.get_result();
     while (!res.first) {
-        static std::mt19937 rnd(time(0));
+        static std::mt19937 rnd(2333);
         board.exec_move(actions[rnd() % actions.size()]);
         actions = board.get_moves();
         res = board.get_result();
