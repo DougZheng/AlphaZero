@@ -4,8 +4,13 @@ Node::Node(Node *parent, double p_sa) :
     parent(parent), p_sa(p_sa) { }
 
 void Node::expand(const std::vector<double> &action_priors, const std::vector<int> &actions) {
-    for (const auto &pos : actions) {
-        children.emplace_back(std::make_pair(new Node(this, action_priors[pos]), pos));
+    {
+        std::lock_guard<std::mutex> lock(this->lock);
+        if (is_leaf()) {
+            for (const auto &pos : actions) {
+                children.emplace_back(std::make_pair(new Node(this, action_priors[pos]), pos));
+            }
+        }
     }
 }
 
@@ -13,29 +18,38 @@ void Node::backup(double value) {
     if (parent != nullptr) {
         parent->backup(-value);
     }
-    ++n_visit;
-    q_sa = ((n_visit - 1) * q_sa + value) / n_visit;
+    --virtual_loss;
+    unsigned n_visit = ++this->n_visit;
+    {
+        std::lock_guard<std::mutex> lock(this->lock);
+        q_sa = ((n_visit - 1) * q_sa + value) / n_visit;
+    }
 }
 
-std::pair<Node*, int> Node::select(double c_puct) const {
-    return *max_element(children.cbegin(), children.cend(), 
+std::pair<Node*, int> Node::select(double c_puct, double c_virtual_loss) {
+    auto res = *max_element(children.begin(), children.end(), 
         [&](const std::pair<Node*, int> &a, const std::pair<Node*, int> &b) {
-            return a.first->get_value(c_puct) < b.first->get_value(c_puct);
+            return a.first->get_value(c_puct, c_virtual_loss) < b.first->get_value(c_puct, c_virtual_loss);
         }); 
+    ++res.first->virtual_loss;
+    return res;
 }
 
-double Node::get_value(double c_puct) const {
-    double u_sa = c_puct * p_sa * sqrt(parent->n_visit) / (1 + n_visit);
-    return q_sa + u_sa;
+double Node::get_value(double c_puct, double c_virtual_loss) const {
+    unsigned n_visit = this->n_visit.load();
+    double u_sa = c_puct * p_sa * sqrt(parent->n_visit.load()) / (1 + n_visit);
+    double virtual_loss = c_virtual_loss * this->virtual_loss.load();
+    return (q_sa * n_visit - virtual_loss) / n_visit + u_sa;
 }
 
 bool Node::is_leaf() const {
     return children.empty();
 }
 
-MCTS::MCTS(int n_playout, double c_puct) : 
-    n_playout(n_playout), c_puct(c_puct),
-    root(new Node(nullptr, 1.0), MCTS::tree_deleter) { }
+MCTS::MCTS(size_t thread_num, int n_playout, double c_puct, double c_virtual_loss) : 
+    n_playout(n_playout), c_puct(c_puct), c_virtual_loss(c_virtual_loss), 
+    root(new Node(nullptr, 1.0), MCTS::tree_deleter), 
+    thread_pool(new ThreadPool(thread_num)) { }
 
 void MCTS::tree_deleter(Node *root) {
     for (auto &child : root->children) {
@@ -48,7 +62,7 @@ void MCTS::tree_deleter(Node *root) {
 void MCTS::playout(Board board) {
     Node *cur = root.get();
     while (!cur->is_leaf()) {
-        auto nxt = cur->select(c_puct);
+        auto nxt = cur->select(c_puct, c_virtual_loss);
         board.exec_move(nxt.second);
         cur = nxt.first;
     }
@@ -66,8 +80,13 @@ void MCTS::playout(Board board) {
 }
 
 int MCTS::get_move(const Board &board) {
+    std::vector<std::future<void>> futures;
     for (int i = 0; i < n_playout; ++i) {
-        playout(board);
+        auto future = thread_pool->commit(std::bind(&MCTS::playout, this, board));
+        futures.emplace_back(std::move(future));
+    }
+    for (int i = 0; i < futures.size(); ++i) {
+        futures[i].wait();
     }
     // display(root, board);
     return max_element(root->children.cbegin(), root->children.cend(), 
@@ -99,7 +118,7 @@ void MCTS::display(Node *root, const Board &board) const {
         priors[child.second / n][child.second % n] = std::make_tuple(
             1.0 * child.first->n_visit / root->n_visit,
             child.first->q_sa,
-            child.first->get_value(c_puct));
+            child.first->get_value(c_puct, c_virtual_loss));
     }
     std::cout << std::fixed << std::setprecision(2);
     std::cout << std::endl;
