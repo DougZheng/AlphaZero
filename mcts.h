@@ -13,7 +13,7 @@ class Node {
 public:
     friend class MCTS;
     Node() = default;
-    Node(Node *par, double p);
+    Node(Node *parent, double p_sa);
     std::pair<Node*, int> select(double c_puct) const;
     void expand(const std::vector<double> &action_priors, const std::vector<int> &actions);
     void backup(double value);
@@ -29,15 +29,14 @@ private:
 
 class MCTS {
 public:
-    MCTS(int n = 4000);
-    ~MCTS();
-    void destroy(Node *root);
+    MCTS(int n_playout, double c_puct = 5);
+    static void destroy(Node *root);
     void playout(Board board);
     int get_move(const Board &board);
     std::pair<std::vector<double>, double> policy(Board &board);
     void display(Node *root, const Board &board) const;
 private:
-    Node *root = new Node(nullptr, 1.0);
-    double c_puct = 5;
+    std::unique_ptr<Node, decltype(MCTS::destroy)*> root;
+    double c_puct;
     int n_playout;
 };

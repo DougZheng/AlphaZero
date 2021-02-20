@@ -1,8 +1,7 @@
 #include "mcts.h"
 
-Node::Node(Node *par, double p) : parent(par), p_sa(p) {
-    
-}
+Node::Node(Node *parent, double p_sa) : 
+    parent(parent), p_sa(p_sa) { }
 
 void Node::expand(const std::vector<double> &action_priors, const std::vector<int> &actions) {
     for (const auto &pos : actions) {
@@ -34,13 +33,9 @@ bool Node::is_leaf() const {
     return children.empty();
 }
 
-MCTS::MCTS(int n) : n_playout(n) {
-
-}
-
-MCTS::~MCTS() {
-    destroy(root);
-}
+MCTS::MCTS(int n_playout, double c_puct) : 
+    n_playout(n_playout), c_puct(c_puct),
+    root(new Node(nullptr, 1.0), MCTS::destroy) { }
 
 void MCTS::destroy(Node *root) {
     for (auto &child : root->children) {
@@ -51,7 +46,7 @@ void MCTS::destroy(Node *root) {
 }
 
 void MCTS::playout(Board board) {
-    Node *cur = root;
+    Node *cur = root.get();
     while (!cur->is_leaf()) {
         auto nxt = cur->select(c_puct);
         board.exec_move(nxt.second);
