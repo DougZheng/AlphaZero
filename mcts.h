@@ -21,7 +21,7 @@ public:
     void expand(const std::vector<double> &action_priors, const std::vector<int> &actions);
     void backup(double value);
     double get_value(double c_puct, double c_virtual_loss) const;
-    bool is_leaf() const;
+    bool get_is_leaf() const { return is_leaf; }
 private:
     Node *parent = nullptr;
     std::vector<std::pair<Node*, int>> children;
@@ -30,6 +30,7 @@ private:
     double p_sa = 1;
     std::atomic<int> virtual_loss{0};
     std::mutex lock;
+    bool is_leaf = true;
 };
 
 class MCTS {

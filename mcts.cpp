@@ -6,10 +6,11 @@ Node::Node(Node *parent, double p_sa) :
 void Node::expand(const std::vector<double> &action_priors, const std::vector<int> &actions) {
     {
         std::lock_guard<std::mutex> lock(this->lock);
-        if (is_leaf()) {
+        if (is_leaf) {
             for (const auto &pos : actions) {
                 children.emplace_back(std::make_pair(new Node(this, action_priors[pos]), pos));
             }
+            is_leaf = false;
         }
     }
 }
@@ -39,15 +40,11 @@ double Node::get_value(double c_puct, double c_virtual_loss) const {
     unsigned n_visit = this->n_visit.load();
     double u_sa = c_puct * p_sa * sqrt(parent->n_visit.load()) / (1 + n_visit);
     double virtual_loss = c_virtual_loss * this->virtual_loss.load();
-    return (q_sa * n_visit - virtual_loss) / n_visit + u_sa;
-}
-
-bool Node::is_leaf() const {
-    return children.empty();
+    return n_visit == 0 ? u_sa : (q_sa * n_visit - virtual_loss) / n_visit + u_sa;
 }
 
 MCTS::MCTS(size_t thread_num, int n_playout, double c_puct, double c_virtual_loss) : 
-    n_playout(n_playout), c_puct(c_puct), c_virtual_loss(c_virtual_loss), 
+    n_playout(n_playout), c_puct(c_puct), c_virtual_loss(c_virtual_loss),
     root(new Node(nullptr, 1.0), MCTS::tree_deleter), 
     thread_pool(new ThreadPool(thread_num)) { }
 
@@ -61,7 +58,7 @@ void MCTS::tree_deleter(Node *root) {
 
 void MCTS::playout(Board board) {
     Node *cur = root.get();
-    while (!cur->is_leaf()) {
+    while (!cur->get_is_leaf()) {
         auto nxt = cur->select(c_puct, c_virtual_loss);
         board.exec_move(nxt.second);
         cur = nxt.first;
@@ -80,15 +77,18 @@ void MCTS::playout(Board board) {
 }
 
 int MCTS::get_move(const Board &board) {
+    // std::cout << "get_move" << std::endl;
     std::vector<std::future<void>> futures;
     for (int i = 0; i < n_playout; ++i) {
         auto future = thread_pool->commit(std::bind(&MCTS::playout, this, board));
         futures.emplace_back(std::move(future));
+        // std::cout << i << " ?? " << std::endl;
     }
+    // std::cout << "finish" << std::endl;
     for (int i = 0; i < futures.size(); ++i) {
         futures[i].wait();
     }
-    // display(root, board);
+    display(root.get(), board);
     return max_element(root->children.cbegin(), root->children.cend(), 
         [](const std::pair<Node*, int> &a, const std::pair<Node*, int> &b) {
             return a.first->n_visit < b.first->n_visit;
@@ -101,7 +101,7 @@ std::pair<std::vector<double>, double> MCTS::policy(Board &board) {
     int player = board.get_cur_player();
     auto res = board.get_result();
     while (!res.first) {
-        static std::mt19937 rnd(2333);
+        static std::mt19937 rnd(time(0));
         board.exec_move(actions[rnd() % actions.size()]);
         actions = board.get_moves();
         res = board.get_result();
