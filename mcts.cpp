@@ -100,12 +100,12 @@ std::pair<std::vector<double>, double> MCTS::policy(Board &board) {
     auto actions = board.get_moves();
     std::vector<double> action_probs(board.get_board_size(), 1.0 / actions.size());
     int player = board.get_cur_player();
-    auto res = board.get_result();
-    while (!res.first) {
-        static std::mt19937 rnd(time(0));
-        board.exec_move(actions[rnd() % actions.size()]);
-        actions = board.get_moves();
+    std::random_shuffle(actions.begin(), actions.end());
+    std::pair<bool, int> res;
+    for (const auto &act : actions) {
+        board.exec_move(act);
         res = board.get_result();
+        if (res.first) break;
     }
     double value = res.second == 0 ? 0 : res.second == player ? 1 : -1;
     return std::make_pair(action_probs, value);
