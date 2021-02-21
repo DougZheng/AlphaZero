@@ -20,8 +20,8 @@ public:
     bool get_is_tie() const;
 private:
     std::vector<std::vector<int>> states;
-    int n = 6;
-    int n_in_row = 4;
+    int n = 15;
+    int n_in_row = 5;
     int cur_player;
     int last_move = -1;
     int cnt_move = 0;
