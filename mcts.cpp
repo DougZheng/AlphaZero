@@ -7,6 +7,7 @@ void Node::expand(const std::vector<double> &action_priors, const std::vector<in
     {
         std::lock_guard<std::mutex> lock(this->lock);
         if (is_leaf) {
+            children.reserve(actions.size());
             for (const auto &pos : actions) {
                 children.emplace_back(std::make_pair(new Node(this, action_priors[pos]), pos));
             }
@@ -88,7 +89,7 @@ int MCTS::get_move(const Board &board) {
     for (int i = 0; i < futures.size(); ++i) {
         futures[i].wait();
     }
-    display(root.get(), board);
+    // display(root.get(), board);
     return max_element(root->children.cbegin(), root->children.cend(), 
         [](const std::pair<Node*, int> &a, const std::pair<Node*, int> &b) {
             return a.first->n_visit < b.first->n_visit;

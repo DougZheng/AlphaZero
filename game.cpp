@@ -20,13 +20,13 @@ void Game::run() {
             // }
             // board.exec_move(x, y);
             std::cout << std::endl;
-            MCTS ai(4, 100000, 5, 3);
+            MCTS ai(4, 50000, 5, 3);
             int pos = ai.get_move(board);
             board.exec_move(pos);
         }
         else {
             std::cout << std::endl;
-            MCTS ai(4, 100000, 5, 3);
+            MCTS ai(4, 150000, 5, 3);
             int pos = ai.get_move(board);
             board.exec_move(pos);
         }
