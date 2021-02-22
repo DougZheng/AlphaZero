@@ -6,6 +6,8 @@ Game::Game() {
 }
 
 void Game::run() {
+    MCTS player1(4, 5000, 5, 3);
+    MCTS player2(4, 5000, 5, 3);
     while (true) {
         board.display();
         auto res = board.get_result();
@@ -20,15 +22,15 @@ void Game::run() {
             // }
             // board.exec_move(x, y);
             std::cout << std::endl;
-            MCTS ai(4, 5000, 5, 3);
-            int pos = ai.get_move(board);
-            board.exec_move(pos);
+            int action = player1.get_move(board);
+            board.exec_move(action);
+            player2.update_with_move(action);
         }
         else {
             std::cout << std::endl;
-            MCTS ai(4, 5000, 5, 3);
-            int pos = ai.get_move(board);
-            board.exec_move(pos);
+            int action = player2.get_move(board);
+            board.exec_move(action);
+            player1.update_with_move(action);
         }
     }
 }
