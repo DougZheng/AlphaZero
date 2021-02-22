@@ -6,8 +6,8 @@ Game::Game() {
 }
 
 void Game::run() {
-    MCTS player1(4, 50000, 5, 3);
-    MCTS player2(4, 50000, 5, 3);
+    MCTS player1(4, 15000, 5, 3);
+    MCTS player2(4, 15000, 5, 3);
     while (true) {
         board.display();
         auto res = board.get_result();
