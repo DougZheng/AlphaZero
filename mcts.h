@@ -36,9 +36,9 @@ private:
 
 class MCTS {
 public:
-    MCTS(size_t thread_num, int n_simulates, double c_puct, double c_virtual_loss);
+    MCTS(size_t thread_num, int n_playout, double c_puct, double c_virtual_loss);
     static void tree_deleter(Node *root);
-    void simulates(Board board);
+    void playout(Board board);
     int get_move(const Board &board);
     std::pair<std::vector<double>, double> policy(Board &board);
     void update_with_move(int last_action);
@@ -46,7 +46,7 @@ public:
 private:
     std::unique_ptr<Node, decltype(MCTS::tree_deleter)*> root;
     std::unique_ptr<ThreadPool> thread_pool;
-    int n_simulates;
+    int n_playout;
     double c_puct;
     double c_virtual_loss;
 };

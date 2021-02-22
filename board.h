@@ -20,12 +20,10 @@ public:
     bool get_is_tie() const;
 private:
     std::vector<std::vector<int>> states;
-    int n = 15;
-    int n_in_row = 5;
+    int n = 6;
+    int n_in_row = 4;
     int cur_player;
     int last_move = -1;
     int cnt_move = 0;
     std::pair<bool, int> result{false, 0};
-    static std::vector<std::vector<int>> dir;
-    std::vector<std::vector<std::vector<int>>> len;
 };

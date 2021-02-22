@@ -40,8 +40,8 @@ double Node::get_value(double c_puct, double c_virtual_loss) const {
     return n_visit == 0 ? u_sa : (q_sa * n_visit - virtual_loss) / n_visit + u_sa;
 }
 
-MCTS::MCTS(size_t thread_num, int n_simulates, double c_puct, double c_virtual_loss) : 
-    n_simulates(n_simulates), c_puct(c_puct), c_virtual_loss(c_virtual_loss),
+MCTS::MCTS(size_t thread_num, int n_playout, double c_puct, double c_virtual_loss) : 
+    n_playout(n_playout), c_puct(c_puct), c_virtual_loss(c_virtual_loss),
     root(new Node(nullptr, 1.0), MCTS::tree_deleter), 
     thread_pool(new ThreadPool(thread_num)) { }
 
@@ -53,7 +53,7 @@ void MCTS::tree_deleter(Node *root) {
     root = nullptr;
 }
 
-void MCTS::simulates(Board board) {
+void MCTS::playout(Board board) {
     Node *cur = root.get();
     while (!cur->get_is_leaf()) {
         auto nxt = cur->select(c_puct, c_virtual_loss);
@@ -75,12 +75,12 @@ void MCTS::simulates(Board board) {
 
 int MCTS::get_move(const Board &board) {
     // std::cout << "get_move" << std::endl;
-    int n_need = n_simulates - root->n_visit;
-    std::cout << "need " << n_need << " simulations" << std::endl;
+    int n_need = n_playout - root->n_visit;
+    std::cout << "need " << n_need << " playout" << std::endl;
     std::vector<std::future<void>> futures;
     futures.reserve(n_need);
     for (int i = 0; i < n_need; ++i) {
-        auto future = thread_pool->commit(std::bind(&MCTS::simulates, this, board));
+        auto future = thread_pool->commit(std::bind(&MCTS::playout, this, board));
         futures.emplace_back(std::move(future));
         // std::cout << i << " ?? " << std::endl;
     }

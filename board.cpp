@@ -1,16 +1,7 @@
 #include "board.h"
 
-std::vector<std::vector<int>> Board::dir = {
-    {0, 1}, {0, -1}, {1, 0}, {-1, 0}, {1, 1}, {-1, -1}, {1, -1}, {-1, 1}
-};
-
 Board::Board(int start_player) : cur_player(start_player) {
-    states.resize(n);
-    len.resize(n);
-    for (int i = 0; i < n; ++i) {
-        states[i].resize(n);
-        len[i].resize(n, std::vector<int>(8));
-    }
+    states.resize(n, std::vector<int>(n));
 }
 
 void Board::exec_move(int pos) {
@@ -22,23 +13,22 @@ void Board::exec_move(int x, int y) {
     cur_player = -cur_player;
     last_move = x * n + y;
     ++cnt_move;
+    const static int dir[4][2] = {
+        {0, 1}, {1, 0}, {1, 1}, {1, -1}
+    };
     auto is_same = [&](int x, int y, int aim) {
         return x >= 0 && x < n && y >= 0 && y < n && states[x][y] == aim;
     };
-    for (int i = 0; i < 8; ++i) {
-        int nx = x + dir[i][0], ny = y + dir[i][1];
-        len[x][y][i] = 1;
-        if (!is_same(nx, ny, states[x][y])) continue;
-        int px = x + dir[i ^ 1][0], py = y + dir[i ^ 1][1];
-        int plen = 1, nlen = len[nx][ny][i];
-        if (is_same(px, py, states[x][y])) {
-            plen += len[px][py][i ^ 1];
-        } 
-        len[x][y][i] += nlen;
-        len[x + dir[i][0] * nlen][y + dir[i][1] * nlen][i ^ 1] += plen;
-    }
-    for (int i = 0; i < 8; i += 2) {
-        if (len[x][y][i] + len[x][y][i ^ 1] - 1 >= n_in_row) {
+    for (int i = 0; i < 4; ++i) {
+        int len = 1, step = 1;
+        while (is_same(x + step * dir[i][0], y + step * dir[i][1], states[x][y])) {
+            ++step, ++len;
+        }
+        step = 1;
+        while (is_same(x - step * dir[i][0], y - step * dir[i][1], states[x][y])) {
+            ++step, ++len;
+        }
+        if (len >= n_in_row) {
             result = std::make_pair(true, states[x][y]);
             return;
         }
