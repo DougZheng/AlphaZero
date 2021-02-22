@@ -1,16 +1,15 @@
 #include "mcts.h"
 
-Node::Node(Node *parent, double p_sa) : 
-    parent(parent), p_sa(p_sa) { }
+Node::Node(Node *parent = nullptr, double p_sa = 1.0, int action = -1) : 
+    parent(parent), p_sa(p_sa), action(action) { }
 
 void Node::expand(const std::vector<double> &action_priors, const std::vector<int> &actions) {
-    std::lock_guard<std::mutex> lock(mutex_child);
-    if (is_leaf) {
+    if (!is_parent.exchange(true)) {
         children.reserve(actions.size());
-        for (const auto &pos : actions) {
-            children.emplace_back(std::make_pair(new Node(this, action_priors[pos]), pos));
+        for (const auto &action : actions) {
+            children.emplace_back(new Node(this, action_priors[action], action));
         }
-        is_leaf = false;
+        is_leaf.store(false);
     }
 }
 
@@ -20,16 +19,16 @@ void Node::backup(double value) {
     }
     --virtual_loss;
     unsigned n_visit = ++this->n_visit;
-    std::lock_guard<std::mutex> lock(mutex_qsa);
+    std::lock_guard<std::mutex> lock(mutex_val);
     q_sa = ((n_visit - 1) * q_sa + value) / n_visit;
 }
 
-std::pair<Node*, int> Node::select(double c_puct, double c_virtual_loss) {
+Node* Node::select(double c_puct, double c_virtual_loss) {
     auto res = *max_element(children.begin(), children.end(), 
-        [&](const std::pair<Node*, int> &a, const std::pair<Node*, int> &b) {
-            return a.first->get_value(c_puct, c_virtual_loss) < b.first->get_value(c_puct, c_virtual_loss);
+        [&](const Node *a, const Node *b) {
+            return a->get_value(c_puct, c_virtual_loss) < b->get_value(c_puct, c_virtual_loss);
         }); 
-    ++res.first->virtual_loss;
+    ++res->virtual_loss;
     return res;
 }
 
@@ -42,12 +41,12 @@ double Node::get_value(double c_puct, double c_virtual_loss) const {
 
 MCTS::MCTS(size_t thread_num, int n_playout, double c_puct, double c_virtual_loss) : 
     n_playout(n_playout), c_puct(c_puct), c_virtual_loss(c_virtual_loss),
-    root(new Node(nullptr, 1.0), MCTS::tree_deleter), 
+    root(new Node(), MCTS::tree_deleter), 
     thread_pool(new ThreadPool(thread_num)) { }
 
 void MCTS::tree_deleter(Node *root) {
     for (auto &child : root->children) {
-        tree_deleter(child.first);
+        tree_deleter(child);
     }
     delete root;
     root = nullptr;
@@ -56,9 +55,8 @@ void MCTS::tree_deleter(Node *root) {
 void MCTS::playout(Board board) {
     Node *cur = root.get();
     while (!cur->get_is_leaf()) {
-        auto nxt = cur->select(c_puct, c_virtual_loss);
-        board.exec_move(nxt.second);
-        cur = nxt.first;
+        cur = cur->select(c_puct, c_virtual_loss);
+        board.exec_move(cur->action);
     }
     auto res = board.get_result();
     if (!res.first) {
@@ -89,10 +87,10 @@ int MCTS::get_move(const Board &board) {
         futures[i].wait();
     }
     // display(root.get(), board);
-    int action = max_element(root->children.cbegin(), root->children.cend(), 
-        [](const std::pair<Node*, int> &a, const std::pair<Node*, int> &b) {
-            return a.first->n_visit < b.first->n_visit;
-        })->second;
+    int action = (*max_element(root->children.cbegin(), root->children.cend(), 
+        [](const Node *a, const Node *b) {
+            return a->n_visit < b->n_visit;
+        }))->action;
     update_with_move(action);
     return action;
 }
@@ -114,15 +112,15 @@ std::pair<std::vector<double>, double> MCTS::policy(Board &board) {
 
 void MCTS::update_with_move(int last_action) {
     for (auto it = root->children.begin(); it != root->children.end(); ++it) {
-        if (it->second == last_action) {
-            Node *new_root = it->first;
+        if ((*it)->action == last_action) {
+            Node *new_root = *it;
             root->children.erase(it);
             new_root->parent = nullptr;
             root.reset(new_root);
             return;
         }
     }
-    root.reset(new Node(nullptr, 1.0));
+    root.reset(new Node());
 }
 
 void MCTS::display(Node *root, const Board &board) const {
@@ -130,10 +128,10 @@ void MCTS::display(Node *root, const Board &board) const {
     using tridouble = std::tuple<double, double, double>;
     std::vector<std::vector<tridouble>> priors(n, std::vector<tridouble>(n));
     for (const auto &child : root->children) {
-        priors[child.second / n][child.second % n] = std::make_tuple(
-            1.0 * child.first->n_visit / root->n_visit,
-            child.first->q_sa,
-            child.first->get_value(c_puct, c_virtual_loss));
+        priors[child->action / n][child->action % n] = std::make_tuple(
+            1.0 * child->n_visit / root->n_visit,
+            child->q_sa,
+            child->get_value(c_puct, c_virtual_loss));
     }
     std::cout << std::fixed << std::setprecision(2);
     std::cout << std::endl;
