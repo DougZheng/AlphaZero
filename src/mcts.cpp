@@ -71,28 +71,26 @@ void MCTS::playout(Board board) {
     }
 }
 
-int MCTS::get_move(const Board &board) {
-    // std::cout << "get_move" << std::endl;
+int MCTS::get_action(const Board &board) {
+    startup(board);
+    return (*max_element(root->children.cbegin(), root->children.cend(), 
+        [](const Node *a, const Node *b) {
+            return a->n_visit < b->n_visit;
+        }))->action;
+}
+
+void MCTS::startup(const Board &board) {
     int n_need = n_playout - root->n_visit;
-    std::cout << "need " << n_need << " playout" << std::endl;
+    std::cout << "need " << n_need << " playouts" << std::endl;
     std::vector<std::future<void>> futures;
     futures.reserve(n_need);
     for (int i = 0; i < n_need; ++i) {
         auto future = thread_pool->commit(std::bind(&MCTS::playout, this, board));
         futures.emplace_back(std::move(future));
-        // std::cout << i << " ?? " << std::endl;
     }
-    // std::cout << "finish" << std::endl;
     for (int i = 0; i < futures.size(); ++i) {
         futures[i].wait();
     }
-    // display(root.get(), board);
-    int action = (*max_element(root->children.cbegin(), root->children.cend(), 
-        [](const Node *a, const Node *b) {
-            return a->n_visit < b->n_visit;
-        }))->action;
-    update_with_move(action);
-    return action;
 }
 
 std::pair<std::vector<double>, double> MCTS::policy(Board &board) {
@@ -144,4 +142,40 @@ void MCTS::display(Node *root, const Board &board) const {
         }
     }
     std::cout << std::endl;
+}
+
+AlphaZero::AlphaZero(NeuralNetwork *neural_network, size_t thread_num, int n_playout, double c_puct, double c_virtual_loss) : 
+    MCTS(thread_num, n_playout, c_puct, c_virtual_loss), neural_network(neural_network) { }
+
+std::pair<std::vector<double>, double> AlphaZero::policy(const Board &board) {
+    auto future = neural_network->commit(board);
+    auto result = future.get();
+    double value = result[1][0];
+    auto action_priors = std::move(result[0]);
+    double sum = std::accumulate(action_priors.cbegin(), action_priors.cend(), 0.0);
+    std::for_each(action_priors.begin(), action_priors.end(), 
+        [sum](double &x) { x /= sum; });
+    return std::make_pair(action_priors, value);
+}
+
+std::vector<double> AlphaZero::get_action_probs(const Board &board, double temp) {
+    startup(board);
+    std::vector<double> action_probs(board.get_board_size(), 0.0);
+    if (temp < 1e-3) {
+        int action = (*max_element(root->children.cbegin(), root->children.cend(), 
+            [](const Node *a, const Node *b) {
+                return a->n_visit < b->n_visit;
+            }))->action;
+        action_probs[action] = 1.0;
+    }
+    else {
+        double sum = 0;
+        for (const auto &child : root->children) {
+            action_probs[child->action] = std::pow(child->n_visit.load(), 1.0 / temp);
+            sum += action_probs[child->action];
+        }
+        std::for_each(action_probs.begin(), action_probs.end(), 
+            [sum](double &x) { x /= sum; });
+    }
+    return action_probs;
 }
