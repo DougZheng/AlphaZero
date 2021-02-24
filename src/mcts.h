@@ -42,7 +42,7 @@ public:
     int get_action(const Board &board);
     std::pair<std::vector<double>, double> policy(Board &board);
     void update_with_move(int last_action);
-    void display(Node *root, const Board &board) const;
+    // void display(Node *root, const Board &board) const;
 protected:
     void startup(const Board &board);
     static void tree_deleter(Node *root);

@@ -5,9 +5,10 @@ Game::Game() {
 
 }
 void Game::run() {
-    NeuralNetwork *neural_network = new NeuralNetwork("../models/best_checkpoint.pt", false, 4);
+    // NeuralNetwork *neural_network = new NeuralNetwork("../models/best_checkpoint.pt", false, 4);
     MCTS player1(4, 15000, 5, 3);
-    AlphaZero player2(neural_network, 4, 1500, 5, 3);
+    MCTS player2(4, 15000, 5, 3);
+    // AlphaZero player2(neural_network, 4, 1500, 5, 3);
     while (true) {
         board.display();
         auto res = board.get_result();
@@ -35,7 +36,7 @@ void Game::run() {
             player2.update_with_move(action);
         }
     }
-    delete neural_network;
+    // delete neural_network;
 }
 
 int main() {

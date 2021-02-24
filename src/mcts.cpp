@@ -121,28 +121,28 @@ void MCTS::update_with_move(int last_action) {
     root.reset(new Node());
 }
 
-void MCTS::display(Node *root, const Board &board) const {
-    int n = board.get_n();
-    using tridouble = std::tuple<double, double, double>;
-    std::vector<std::vector<tridouble>> priors(n, std::vector<tridouble>(n));
-    for (const auto &child : root->children) {
-        priors[child->action / n][child->action % n] = std::make_tuple(
-            1.0 * child->n_visit / root->n_visit,
-            child->q_sa,
-            child->get_value(c_puct, c_virtual_loss));
-    }
-    std::cout << std::fixed << std::setprecision(2);
-    std::cout << std::endl;
-    for (int i = 0; i < n; ++i) {
-        for (int j = 0; j < n; ++j) {
-            std::cout << std::get<0>(priors[i][j]) 
-            << "(" << std::showpos << std::get<1>(priors[i][j]) << ","
-            << std::get<2>(priors[i][j]) << ")"
-            << std::noshowpos << " \n"[j == n - 1];
-        }
-    }
-    std::cout << std::endl;
-}
+// void MCTS::display(Node *root, const Board &board) const {
+//     int n = board.get_n();
+//     using tridouble = std::tuple<double, double, double>;
+//     std::vector<std::vector<tridouble>> priors(n, std::vector<tridouble>(n));
+//     for (const auto &child : root->children) {
+//         priors[child->action / n][child->action % n] = std::make_tuple(
+//             1.0 * child->n_visit / root->n_visit,
+//             child->q_sa,
+//             child->get_value(c_puct, c_virtual_loss));
+//     }
+//     std::cout << std::fixed << std::setprecision(2);
+//     std::cout << std::endl;
+//     for (int i = 0; i < n; ++i) {
+//         for (int j = 0; j < n; ++j) {
+//             std::cout << std::get<0>(priors[i][j]) 
+//             << "(" << std::showpos << std::get<1>(priors[i][j]) << ","
+//             << std::get<2>(priors[i][j]) << ")"
+//             << std::noshowpos << " \n"[j == n - 1];
+//         }
+//     }
+//     std::cout << std::endl;
+// }
 
 AlphaZero::AlphaZero(NeuralNetwork *neural_network, size_t thread_num, int n_playout, double c_puct, double c_virtual_loss) : 
     MCTS(thread_num, n_playout, c_puct, c_virtual_loss), neural_network(neural_network) { }
