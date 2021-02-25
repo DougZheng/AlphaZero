@@ -1,9 +1,9 @@
 #include "game.h"
 #include "mcts.h"
 
-Game::Game() {
+Game::Game(int n, int n_in_row) :
+    board(n, n_in_row) { }
 
-}
 void Game::run() {
     // NeuralNetwork *neural_network = new NeuralNetwork("../models/best_checkpoint.pt", false, 4);
     MCTS player1(4, 15000, 5, 3);
@@ -40,6 +40,6 @@ void Game::run() {
 }
 
 int main() {
-    Game game;
+    Game game(15, 5);
     game.run();
 }

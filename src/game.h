@@ -6,7 +6,7 @@
 
 class Game {
 public:
-    Game();
+    Game(int n, int n_in_row);
     void run(); 
 private:
     Board board;

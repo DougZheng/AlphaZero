@@ -1,9 +1,9 @@
 %module library
 
 %{
-#include "neural_network.h"
 #include "mcts.h"
 #include "board.h"
+#include "neural_network.h"
 %}
 
 %include "std_vector.i"

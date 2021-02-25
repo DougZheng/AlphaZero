@@ -6,7 +6,7 @@
 
 class Board {
 public:
-    Board(int start_player = 1);
+    Board(int n, int n_in_row, int cur_player = 1);
     void exec_move(int pos);
     void exec_move(int x, int y);
     std::vector<int> get_moves() const;
@@ -24,7 +24,7 @@ private:
     std::vector<std::vector<int>> states;
     int n = 15;
     int n_in_row = 5;
-    int cur_player;
+    int cur_player = 1;
     int last_move = -1;
     int cnt_move = 0;
     std::pair<bool, int> result{false, 0};

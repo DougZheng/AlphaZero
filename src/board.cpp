@@ -1,6 +1,7 @@
 #include "board.h"
 
-Board::Board(int start_player) : cur_player(start_player) {
+Board::Board(int n, int n_in_row, int cur_player) :
+    n(n), n_in_row(n_in_row), cur_player(cur_player) {
     states.resize(n, std::vector<int>(n));
 }
 

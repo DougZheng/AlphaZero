@@ -8,14 +8,14 @@ using namespace std::chrono_literals;
 
 NeuralNetwork::NeuralNetwork(std::string model_path, bool use_gpu,
                              unsigned int batch_size)
-    : module(std::make_shared<torch::jit::script::Module>(torch::jit::load(model_path.c_str()))),
+    : module(torch::jit::load(model_path.c_str())),
       use_gpu(use_gpu),
       batch_size(batch_size),
       running(true),
       loop(nullptr) {
   if (this->use_gpu) {
     // move to CUDA
-    this->module->to(at::kCUDA);
+    this->module.to(at::kCUDA);
   }
 
   // run infer thread
@@ -113,7 +113,7 @@ void NeuralNetwork::infer() {
   std::vector<torch::jit::IValue> inputs{
       this->use_gpu ? torch::cat(states, 0).to(at::kCUDA)
                     : torch::cat(states, 0)};
-  auto result = this->module->forward(inputs).toTuple();
+  auto result = this->module.forward(inputs).toTuple();
 
   torch::Tensor p_batch = result->elements()[0]
                               .toTensor()

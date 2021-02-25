@@ -12,6 +12,7 @@
 #include <tuple>
 #include <thread>
 #include <atomic>
+#include <future>
 
 class Node {
 public:

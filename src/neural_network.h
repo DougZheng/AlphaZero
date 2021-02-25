@@ -2,14 +2,12 @@
 
 #include "board.h"
 #include <torch/script.h>  // One-stop header.
-
 #include <future>
 #include <memory>
 #include <queue>
 #include <string>
 #include <utility>
 #include <vector>
-
 
 class NeuralNetwork {
  public:
@@ -35,7 +33,7 @@ class NeuralNetwork {
   std::mutex lock;              // lock for tasks queue
   std::condition_variable cv;   // condition variable for tasks queue
 
-  std::shared_ptr<torch::jit::script::Module> module;  // torch module
+  torch::jit::script::Module module;  // torch module
   unsigned int batch_size;                             // batch size
   bool use_gpu;                                        // use gpu
 };

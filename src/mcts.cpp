@@ -81,7 +81,7 @@ int MCTS::get_action(const Board &board) {
 
 void MCTS::startup(const Board &board) {
     int n_need = n_playout - root->n_visit;
-    std::cout << "need " << n_need << " playouts" << std::endl;
+    // std::cout << "need " << n_need << " playouts" << std::endl;
     std::vector<std::future<void>> futures;
     futures.reserve(n_need);
     for (int i = 0; i < n_need; ++i) {

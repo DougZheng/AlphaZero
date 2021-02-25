@@ -1,14 +1,19 @@
 import sys
 sys.path.append('../build')
-from library import NeuralNetwork, MCTS, Board
+from library import NeuralNetwork
+from library import MCTS, AlphaZero
+from library import Board
+# from neural_network import NeuralNetworkWrapper
 
 class Game():
     def __init__(self):
         pass
     def run(self):
-        board = Board()
-        player1 = MCTS(4, 1500, 5, 3)
-        player2 = MCTS(4, 1500, 5, 3)
+        board = Board(9, 5)
+        player1 = MCTS(4, 5000, 5, 3)
+        # player2 = MCTS(4, 1500, 5, 3)
+        neural_network = NeuralNetwork("../models/best_checkpoint.pt", False, 4)
+        player2 = AlphaZero(neural_network, 4, 800, 5, 3)
         while True:
             board.display()
             res = board.get_result()
