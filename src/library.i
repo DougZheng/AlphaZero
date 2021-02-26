@@ -12,6 +12,7 @@ namespace std {
     %template(IntVectorVector) vector<vector<int>>;
     %template(DoubleVector) vector<double>;
     %template(DoubleVectorVector) vector<vector<double>>;
+    %template(IntVectorVectorVector) vector<vector<vector<int>>>;
 }
 
 %include "std_pair.i"
@@ -27,7 +28,7 @@ namespace std {
 
 class NeuralNetwork {
 public:
-    NeuralNetwork(std::string model_path, bool use_gpu, unsigned int batch_size);
+    NeuralNetwork(std::string model_path, bool use_gpu, unsigned batch_size);
     ~NeuralNetwork();
-    void set_batch_size(unsigned int batch_size);
+    void set_batch_size(unsigned batch_size);
 };

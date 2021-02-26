@@ -1,6 +1,6 @@
 config = {
     # gomoku
-    'n': 9,                                    # board size
+    'n': 8,                                    # board size
     'n_in_row': 5,                              # n in row
 
     # mcts
@@ -14,16 +14,16 @@ config = {
     'train_use_gpu' : False,                     # train neural network using cuda
     'lr': 0.001,                                # learning rate
     'l2': 0.0001,                               # L2
-    'num_channels': 256,                        # convolution neural network channel size
-    'num_layers' : 4,                           # residual layer number
+    'num_channels': 128,                        # convolution neural network channel size
+    'num_layers' : 3,                           # residual layer number
     'epochs': 1.5,                              # train epochs
     'batch_size': 512,                          # batch size
 
     # train
     'num_iters': 10000,                         # train iterations
-    'num_eps': 10,                              # self play times in per iter
-    'num_train_threads': 10,                    # self play in parallel
-    'num_explore': 5,                           # explore step in a game
+    'num_eps': 4,                              # self play times in per iter
+    'num_train_threads': 4,                    # self play in parallel
+    'num_explore': 20,                          # explore step in a game
     'temp': 1,                                  # temperature
     'dirichlet_alpha': 0.3,                     # action noise in self play games
     'update_threshold': 0.55,                   # update model threshold

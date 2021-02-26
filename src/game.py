@@ -10,10 +10,10 @@ class Game():
         pass
     def run(self):
         board = Board(8, 5)
-        player1 = MCTS(4, 5000, 5, 3)
-        # player2 = MCTS(4, 1500, 5, 3)
-        neural_network = NeuralNetwork("../test/models/best_checkpoint.pt", False, 4)
-        player2 = AlphaZero(neural_network, 4, 5000, 5, 3)
+        player1 = MCTS(4, 1500, 5, 3)
+        player2 = MCTS(4, 1500, 5, 3)
+        # neural_network = NeuralNetwork("../test/models/best_checkpoint.pt", False, 4)
+        # player2 = AlphaZero(neural_network, 4, 5, 5, 3)
         while True:
             board.display()
             res = board.get_result()

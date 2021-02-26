@@ -1,138 +1,82 @@
 #include "neural_network.h"
-// #include <ATen/cuda/CUDAContext.h>
-// #include <ATen/cuda/CUDAGuard.h>
-
-#include <iostream>
 
 using namespace std::chrono_literals;
 
-NeuralNetwork::NeuralNetwork(std::string model_path, bool use_gpu,
-                             unsigned int batch_size)
-    : module(torch::jit::load(model_path.c_str())),
-      use_gpu(use_gpu),
-      batch_size(batch_size),
-      running(true),
-      loop(nullptr) {
-  if (this->use_gpu) {
-    // move to CUDA
-    this->module.to(at::kCUDA);
-  }
-
-  // run infer thread
-  this->loop = std::make_unique<std::thread>([this] {
-    while (this->running) {
-      this->infer();
+NeuralNetwork::NeuralNetwork(std::string model_path, bool use_gpu, unsigned batch_size) :
+    module(torch::jit::load(model_path.c_str())), use_gpu(use_gpu), batch_size(batch_size), 
+    running(true), loop(nullptr) {
+    if (use_gpu) {
+        module.to(at::kCUDA);
     }
-  });
+    loop = std::make_unique<std::thread>([this]() {
+        while (running.load()) {
+            infer();
+        }
+    });
 }
 
 NeuralNetwork::~NeuralNetwork() {
-  this->running = false;
-  this->loop->join();
+    running.store(false);
+    loop->join();
 }
 
 std::future<NeuralNetwork::return_type> NeuralNetwork::commit(const Board &board) {
-  int n = board.get_n();
-
-  const auto board_states = board.get_states();
-  // convert data format
-  std::vector<int> board0;
-  for (int i = 0; i < n; i++) {
-    board0.insert(board0.end(), board_states[i].begin(), board_states[i].end());
-  }
-
-  torch::Tensor temp =
-      torch::from_blob(&board0[0], {1, 1, n, n}, torch::dtype(torch::kInt32));
-
-  torch::Tensor state0 = temp.gt(0).toType(torch::kFloat32);
-  torch::Tensor state1 = temp.lt(0).toType(torch::kFloat32);
-
-  int last_move = board.get_last_move();
-  int cur_player = board.get_cur_player();
-
-  if (cur_player == -1) {
-    std::swap(state0, state1);
-  }
-
-  torch::Tensor state2 =
-      torch::zeros({1, 1, n, n}, torch::dtype(torch::kFloat32));
-
-  if (last_move != -1) {
-    state2[0][0][last_move / n][last_move % n] = 1;
-  }
-
-  // torch::Tensor states = torch::cat({state0, state1}, 1);
-  torch::Tensor states = torch::cat({state0, state1, state2}, 1);
-
-  // emplace task
-  std::promise<return_type> promise;
-  auto ret = promise.get_future();
-
-  {
-    std::lock_guard<std::mutex> lock(this->lock);
-    tasks.emplace(std::make_pair(states, std::move(promise)));
-  }
-
-  this->cv.notify_all();
-
-  return ret;
+    int n = board.get_n();
+    const auto raw_states = board.get_encode_states();
+    std::vector<int> states1D;
+    for (const auto &vc1 : raw_states) {
+        for (const auto &vc2 : vc1) {
+            states1D.insert(states1D.end(), vc2.cbegin(), vc2.cend());
+        }
+    }
+    torch::Tensor states = torch::from_blob(&states1D[0], {1, 4, n, n}, 
+        torch::dtype(torch::kInt32)).toType(torch::kFloat32);
+    std::promise<return_type> promise;
+    auto res = promise.get_future();
+    {
+        std::lock_guard<std::mutex> lock(this->lock);
+        tasks.emplace(std::make_pair(states, std::move(promise)));
+        cv.notify_all();
+    }
+    return res;
 }
 
 void NeuralNetwork::infer() {
-  // get inputs
-  std::vector<torch::Tensor> states;
-  std::vector<std::promise<return_type>> promises;
-
-  bool timeout = false;
-  while (states.size() < this->batch_size && !timeout) {
-    // pop task
-    {
-      std::unique_lock<std::mutex> lock(this->lock);
-      if (this->cv.wait_for(lock, 1ms,
-                            [this] { return this->tasks.size() > 0; })) {
-        auto task = std::move(this->tasks.front());
-        states.emplace_back(std::move(task.first));
-        promises.emplace_back(std::move(task.second));
-
-        this->tasks.pop();
-
-      } else {
-        // timeout
-        // std::cout << "timeout" << std::endl;
-        timeout = true;
-      }
+    std::vector<torch::Tensor> states;
+    std::vector<std::promise<return_type>> promises;
+    bool timeout = false;
+    while (states.size() < batch_size && !timeout) {
+        {
+            std::unique_lock<std::mutex> lock(this->lock);
+            if (cv.wait_for(lock, 1ms, [this]() {
+                return tasks.size() > 0;
+            })) {
+                auto task = std::move(tasks.front());
+                states.emplace_back(std::move(task.first));
+                promises.emplace_back(std::move(task.second));
+                tasks.pop();
+            }
+            else {
+                timeout = true;
+            }
+        }
     }
-  }
-
-  // inputs empty
-  if (states.size() == 0) {
-    return;
-  }
-
-  // infer
-  std::vector<torch::jit::IValue> inputs{
-      this->use_gpu ? torch::cat(states, 0).to(at::kCUDA)
-                    : torch::cat(states, 0)};
-  auto result = this->module.forward(inputs).toTuple();
-
-  torch::Tensor p_batch = result->elements()[0]
-                              .toTensor()
-                              .exp()
-                              .toType(torch::kFloat32)
-                              .to(at::kCPU);
-  torch::Tensor v_batch =
-      result->elements()[1].toTensor().toType(torch::kFloat32).to(at::kCPU);
-
-  // set promise value
-  for (unsigned int i = 0; i < promises.size(); i++) {
-    torch::Tensor p = p_batch[i];
-    torch::Tensor v = v_batch[i];
-
-    std::vector<double> prob(static_cast<float*>(p.data_ptr()),
-                             static_cast<float*>(p.data_ptr()) + p.size(0));
-    std::vector<double> value{v.item<float>()};
-    return_type temp{std::move(prob), std::move(value)};
-
-    promises[i].set_value(std::move(temp));
-  }
+    if (states.empty()) {
+        return;
+    }
+    std::vector<torch::jit::IValue> inputs{
+        use_gpu ? torch::cat(states, 0).to(at::kCUDA) : torch::cat(states, 0)
+    };
+    auto res = module.forward(inputs).toTuple();
+    torch::Tensor p_batch = res->elements()[0].toTensor().exp().toType(torch::kFloat32).to(at::kCPU);
+    torch::Tensor v_batch = res->elements()[1].toTensor().toType(torch::kFloat32).to(at::kCPU);
+    for (unsigned i = 0; i < promises.size(); ++i) {
+        torch::Tensor p = p_batch[i];
+        torch::Tensor v = v_batch[i];
+        std::vector<double> prob(static_cast<float*>(p.data_ptr()), 
+            static_cast<float*>(p.data_ptr()) + p.size(0));
+        std::vector<double> value{v.item<float>()};
+        return_type temp{std::move(prob), std::move(value)};
+        promises[i].set_value(std::move(temp));
+    }
 }

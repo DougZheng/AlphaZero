@@ -19,8 +19,10 @@ void Node::backup(double value) {
     }
     --virtual_loss;
     unsigned n_visit = ++this->n_visit;
-    std::lock_guard<std::mutex> lock(mutex_val);
-    q_sa = ((n_visit - 1) * q_sa + value) / n_visit;
+    {
+        std::lock_guard<std::mutex> lock(mutex_val);
+        q_sa = ((n_visit - 1) * q_sa + value) / n_visit;
+    }
 }
 
 Node* Node::select(double c_puct, double c_virtual_loss) {
@@ -121,40 +123,47 @@ void MCTS::update_with_move(int last_action) {
     root.reset(new Node());
 }
 
-// void MCTS::display(Node *root, const Board &board) const {
-//     int n = board.get_n();
-//     using tridouble = std::tuple<double, double, double>;
-//     std::vector<std::vector<tridouble>> priors(n, std::vector<tridouble>(n));
-//     for (const auto &child : root->children) {
-//         priors[child->action / n][child->action % n] = std::make_tuple(
-//             1.0 * child->n_visit / root->n_visit,
-//             child->q_sa,
-//             child->get_value(c_puct, c_virtual_loss));
-//     }
-//     std::cout << std::fixed << std::setprecision(2);
-//     std::cout << std::endl;
-//     for (int i = 0; i < n; ++i) {
-//         for (int j = 0; j < n; ++j) {
-//             std::cout << std::get<0>(priors[i][j]) 
-//             << "(" << std::showpos << std::get<1>(priors[i][j]) << ","
-//             << std::get<2>(priors[i][j]) << ")"
-//             << std::noshowpos << " \n"[j == n - 1];
-//         }
-//     }
-//     std::cout << std::endl;
-// }
+void MCTS::display(Node *root, const Board &board) const {
+    // int n = board.get_n();
+    // using tridouble = std::tuple<double, double, double>;
+    // std::vector<std::vector<tridouble>> priors(n, std::vector<tridouble>(n));
+    // for (const auto &child : root->children) {
+    //     priors[child->action / n][child->action % n] = std::make_tuple(
+    //         1.0 * child->n_visit / root->n_visit,
+    //         child->q_sa,
+    //         child->get_value(c_puct, c_virtual_loss));
+    // }
+    // std::cout << std::fixed << std::setprecision(2);
+    // std::cout << std::endl;
+    // for (int i = 0; i < n; ++i) {
+    //     for (int j = 0; j < n; ++j) {
+    //         std::cout << std::get<0>(priors[i][j]) 
+    //         << "(" << std::showpos << std::get<1>(priors[i][j]) << ","
+    //         << std::get<2>(priors[i][j]) << ")"
+    //         << std::noshowpos << " \n"[j == n - 1];
+    //     }
+    // }
+    // std::cout << std::endl;
+}
 
 AlphaZero::AlphaZero(NeuralNetwork *neural_network, size_t thread_num, int n_playout, double c_puct, double c_virtual_loss) : 
     MCTS(thread_num, n_playout, c_puct, c_virtual_loss), neural_network(neural_network) { }
 
-std::pair<std::vector<double>, double> AlphaZero::policy(const Board &board) {
+std::pair<std::vector<double>, double> AlphaZero::policy(Board &board) {
     auto future = neural_network->commit(board);
     auto result = future.get();
     double value = result[1][0];
     auto action_priors = std::move(result[0]);
     double sum = std::accumulate(action_priors.cbegin(), action_priors.cend(), 0.0);
-    std::for_each(action_priors.begin(), action_priors.end(), 
-        [sum](double &x) { x /= sum; });
+    if (sum < 1e-3) {
+        std::cout << "Warning: no valid move." << std::endl;
+        std::for_each(action_priors.begin(), action_priors.end(), 
+            [sum](double &x) { x /= sum; });
+    }
+    else {
+        std::for_each(action_priors.begin(), action_priors.end(), 
+            [sum](double &x) { x /= sum; });
+    }
     return std::make_pair(action_priors, value);
 }
 

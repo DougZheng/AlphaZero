@@ -71,26 +71,30 @@ class TrainPipeline():
             logging.debug('-' * 65)
             logging.debug('iter: {}'.format(itr))
             logging.debug('-' * 65)
-            libtorch = NeuralNetwork('./models/checkpoint.pt', self.libtorch_use_gpu, self.num_mcts_sims * self.num_train_threads)
+            libtorch = NeuralNetwork('./models/checkpoint.pt', self.libtorch_use_gpu, self.num_mcts_threads * self.num_train_threads)
             itr_examples = []
             with concurrent.futures.ThreadPoolExecutor(max_workers = self.num_train_threads) as executor:
-                futures = [executor.submit(self.self_play, 1 if itr % 2 else -1, 
-                    libtorch, self.show_train_board if k == 1 else False) for k in range(1, self.num_eps + 1)]
+                futures = [executor.submit(self.self_play, libtorch, 
+                    self.show_train_board if k == 0 else False) for k in range(self.num_eps)]
                 for k, f in enumerate(futures):
+                    # print("remain is ", remain)
                     examples = f.result()
-                    itr_examples += examples
                     remain = min(len(futures) - (k + 1), self.num_train_threads)
                     libtorch.set_batch_size(max(remain * self.num_mcts_threads, 1))
+                    itr_examples.extend(examples)
                     logging.debug('eps: {}, examples: {}, moves: {}'.format(k + 1, len(examples), len(examples) // 8) )
             del libtorch
             self.examples_buffer.append(itr_examples)
             train_data = reduce(lambda a, b : a + b, self.examples_buffer)
-            random.shuffle(train_data)
-            epochs = self.epochs * (len(itr_examples) + self.batch_size - 1) // self.batch_size
-            epoch_res = self.nnet.train(train_data, self.batch_size, int(epochs))
-            for epo, loss, entropy in epoch_res:
-                logging.debug("epoch: {}, loss: {}, entropy: {}".format(epo, loss, entropy))
-            self.nnet.save_model()
+
+            if len(train_data) >= self.batch_size:
+                random.shuffle(train_data)
+                epochs = (len(itr_examples) + self.batch_size - 1) // self.batch_size * self.epochs
+                epoch_res = self.nnet.train(train_data, self.batch_size, int(epochs))
+                for epo, loss, entropy in epoch_res:
+                    logging.debug("epoch: {}, loss: {}, entropy: {}".format(epo, loss, entropy))
+                self.nnet.save_model()
+
             self.save_samples()
             
             if itr % self.check_freq == 0:
@@ -107,64 +111,61 @@ class TrainPipeline():
                 del libtorch_current
                 del libtorch_best
     
-    def self_play(self, start_player, libtorch, show):
+    def self_play(self, libtorch, show):
         if show:
             print('display of a self play round begins\n')
 
         train_examples = []
-        player1 = AlphaZero(libtorch, self.num_mcts_threads, self.num_mcts_sims, self.c_puct, self.c_virtual_loss)
-        player2 = AlphaZero(libtorch, self.num_mcts_threads, self.num_mcts_sims, self.c_puct, self.c_virtual_loss)
-        players = [player2, None, player1]
-        player_index = 1
-        board = Board(self.n, self.n_in_row, start_player)
+        player = AlphaZero(libtorch, self.num_mcts_threads, self.num_mcts_sims, self.c_puct, self.c_virtual_loss)
+        board = Board(self.n, self.n_in_row)
 
         episode_step = 0
         while True:
             episode_step += 1
-            player = players[player_index + 1]
             if episode_step <= self.num_explore:
                 prob = np.array(list(player.get_action_probs(board, self.temp)))
+                legal_moves = list(board.get_moves())
+                noise = 0.25 * np.random.dirichlet(self.dirichlet_alpha * np.ones(len(legal_moves)))
+                prob = 0.75 * prob
+                for i in range(len(legal_moves)):
+                    prob[legal_moves[i]] += noise[i]
+                prob /= np.sum(prob)
+                action = np.random.choice(len(prob), p = prob)
             else:
                 prob = np.array(list(player.get_action_probs(board, 0)))
-            board_states = tuple2d_to_numpy2d(board.get_states())
-            last_action = board.get_last_move()
+                action = np.random.choice(len(prob), p = prob)
+
+            states = board.get_encode_states()
             cur_player = board.get_cur_player()
+            sym = self.get_symmetries(states, prob)
+            for s, p in sym:
+                train_examples.append([s, p, cur_player])
 
-            sym = self.get_symmetries(board_states, prob, last_action)
-            for b, p, a in sym:
-                train_examples.append([b, a, cur_player, p])
-
-            legal_moves = list(board.get_moves())
-            noise = 0.1 * np.random.dirichlet(self.dirichlet_alpha * np.ones(len(legal_moves)))
-
-            prob = 0.9 * prob
-            for i in range(len(legal_moves)):
-                prob[legal_moves[i]] += noise[i]
-            prob /= np.sum(prob)
-
-            action = np.random.choice(len(prob), p = prob)
-                
             board.exec_move(action)
             if show:
+                for i in range(self.action_size):
+                    if i % self.n == 0:
+                        print()
+                    if i == action:
+                        print('\033[31;1m{:.3f}\033[0m'.format(prob[i]), end = ' ')
+                    else:
+                        print('{:.3f}'.format(prob[i]), end = ' ')
+                print('\n')
                 board.display()
-            player1.update_with_move(action)
-            player2.update_with_move(action)
 
-            player_index = -player_index
+            player.update_with_move(action)
 
             ended, winner = board.get_result()
             if ended:
-                break
-        if show:
-            print('display of a self play round finished\n')
-
-        return [(x[0], x[1], x[2], x[3], x[2] * winner) for x in train_examples]
+                if show:
+                    print('display of a self play round finished\n')
+                return [(x[0], x[1], x[2] * winner) for x in train_examples]
 
     def contest(self, network1, network2, num_contest):
         win_cnt, lose_cnt, draw_cnt = 0, 0, 0
         with concurrent.futures.ThreadPoolExecutor(max_workers = self.num_train_threads) as executor:
             futures = [executor.submit(self._contest, network1, network2, 
-                1 if k <= num_contest // 2 else -1, self.show_train_board if k == 1 else 0) for k in range(1, num_contest + 1)]
+                1 if k < num_contest // 2 else -1, self.show_train_board if k == 0 else 0) for k in range(num_contest)]
             for f in futures:
                 winner = f.result()
                 if winner == 1:
@@ -196,28 +197,37 @@ class TrainPipeline():
             ended, winner = board.get_result()
             if ended == 1:
                 if show:
-                    print('display of a contest round begins\n')
+                    print('display of a contest round finished\n')
                 return winner
             
             player1.update_with_move(best_move)
             player2.update_with_move(best_move)
             player_index = -player_index
 
-    def get_symmetries(self, board, pi, last_action):
-        assert(len(pi) == self.action_size)
-        pi_board = np.reshape(pi, (self.n, self.n))
-        last_action_board = np.zeros((self.n, self.n))
-        last_action_board[last_action // self.n][last_action % self.n] = 1
+    def get_symmetries(self, states, prob):
+        assert(len(prob) == self.action_size)
+        prob = np.reshape(prob, (self.n, self.n))
         res = []
         for i in range(4):
-            newB = np.rot90(board, i)
-            newPi = np.rot90(pi_board, i)
-            newAction = np.rot90(last_action_board, i)
-            res += [(newB, newPi.ravel(), np.argmax(newAction) if last_action != -1 else -1)]
-            newB = np.fliplr(newB)
-            newPi = np.fliplr(newPi)
-            newAction = np.fliplr(newAction)
-            res += [(newB, newPi.ravel(), np.argmax(newAction) if last_action != -1 else -1)]
+            equi_states = np.array([np.rot90(s, i) for s in states])
+            equi_prob = np.rot90(prob, i)
+            res.append((equi_states, equi_prob.ravel()))
+            equi_states = np.array([np.fliplr(s) for s in equi_states])
+            equi_prob = np.fliplr(equi_prob)
+            res.append((equi_states, equi_prob.ravel()))
+        # pi_board = np.reshape(pi, (self.n, self.n))
+        # last_action_board = np.zeros((self.n, self.n))
+        # last_action_board[last_action // self.n][last_action % self.n] = 1
+        # res = []
+        # for i in range(4):
+        #     newB = np.rot90(board, i)
+        #     newPi = np.rot90(pi_board, i)
+        #     newAction = np.rot90(last_action_board, i)
+        #     res += [(newB, newPi.ravel(), np.argmax(newAction) if last_action != -1 else -1)]
+        #     newB = np.fliplr(newB)
+        #     newPi = np.fliplr(newPi)
+        #     newAction = np.fliplr(newAction)
+        #     res += [(newB, newPi.ravel(), np.argmax(newAction) if last_action != -1 else -1)]
         return res
 
     def load_samples(self, folder = 'models', filename = 'checkpoint.example'):

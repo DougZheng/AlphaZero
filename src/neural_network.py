@@ -60,7 +60,7 @@ class NeuralNetWork(nn.Module):
         super(NeuralNetWork, self).__init__()
 
         # residual block
-        res_list = [ResidualBlock(3, num_channels)] + [ResidualBlock(num_channels, num_channels) for _ in range(num_layers - 1)]
+        res_list = [ResidualBlock(4, num_channels)] + [ResidualBlock(num_channels, num_channels) for _ in range(num_layers - 1)]
         self.res_layers = nn.Sequential(*res_list)
 
         # policy head
@@ -100,7 +100,6 @@ class NeuralNetWork(nn.Module):
         v = self.relu(v)
         v = self.v_fc2(v)
         v = self.tanh(v)
-
         return p, v
 
 
@@ -160,9 +159,11 @@ class NeuralNetWorkWrapper():
             train_data = random.sample(example_buffer, batch_size)
 
             # extract train data
-            board_batch, last_action_batch, cur_player_batch, p_batch, v_batch = list(zip(*train_data))
+            # board_batch, last_action_batch, cur_player_batch, p_batch, v_batch = list(zip(*train_data))
 
-            state_batch = self._data_convert(board_batch, last_action_batch, cur_player_batch)
+            # state_batch = self._data_convert(board_batch, last_action_batch, cur_player_batch)
+            state_batch, p_batch, v_batch = list(zip(*train_data))
+            state_batch = torch.Tensor(state_batch).cuda() if self.train_use_gpu else torch.Tensor(state_batch)
             p_batch = torch.Tensor(p_batch).cuda() if self.train_use_gpu else torch.Tensor(p_batch)
             v_batch = torch.Tensor(v_batch).unsqueeze(
                 1).cuda() if self.train_use_gpu else torch.Tensor(v_batch).unsqueeze(1)
@@ -188,17 +189,17 @@ class NeuralNetWorkWrapper():
 
         return res
 
-    def infer(self, feature_batch):
-        """predict p and v by raw input
-           return numpy
-        """
-        board_batch, last_action_batch, cur_player_batch = list(zip(*feature_batch))
-        states = self._data_convert(board_batch, last_action_batch, cur_player_batch)
+    # def infer(self, feature_batch):
+    #     """predict p and v by raw input
+    #        return numpy
+    #     """
+    #     board_batch, last_action_batch, cur_player_batch = list(zip(*feature_batch))
+    #     states = self._data_convert(board_batch, last_action_batch, cur_player_batch)
 
-        self.neural_network.eval()
-        log_ps, vs = self.neural_network(states)
+    #     self.neural_network.eval()
+    #     log_ps, vs = self.neural_network(states)
 
-        return np.exp(log_ps.cpu().detach().numpy()), vs.cpu().detach().numpy()
+    #     return np.exp(log_ps.cpu().detach().numpy()), vs.cpu().detach().numpy()
 
     def _infer(self, state_batch):
         """predict p and v by state
@@ -210,32 +211,32 @@ class NeuralNetWorkWrapper():
 
         return np.exp(log_ps.cpu().detach().numpy()), vs.cpu().detach().numpy()
 
-    def _data_convert(self, board_batch, last_action_batch, cur_player_batch):
-        """convert data format
-           return tensor
-        """
-        n = self.n
+    # def _data_convert(self, board_batch, last_action_batch, cur_player_batch):
+    #     """convert data format
+    #        return tensor
+    #     """
+    #     n = self.n
 
-        board_batch = torch.Tensor(board_batch).unsqueeze(1)
-        state0 = (board_batch > 0).float()
-        state1 = (board_batch < 0).float()
+    #     board_batch = torch.Tensor(board_batch).unsqueeze(1)
+    #     state0 = (board_batch > 0).float()
+    #     state1 = (board_batch < 0).float()
 
-        state2 = torch.zeros((len(last_action_batch), 1, n, n)).float()
+    #     state2 = torch.zeros((len(last_action_batch), 1, n, n)).float()
 
-        for i in range(len(board_batch)):
-            if cur_player_batch[i] == -1:
-                temp = state0[i].clone()
-                state0[i].copy_(state1[i])
-                state1[i].copy_(temp)
+    #     for i in range(len(board_batch)):
+    #         if cur_player_batch[i] == -1:
+    #             temp = state0[i].clone()
+    #             state0[i].copy_(state1[i])
+    #             state1[i].copy_(temp)
 
-            last_action = last_action_batch[i]
-            if last_action != -1:
-                x, y = last_action // self.n, last_action % self.n
-                state2[i][0][x][y] = 1
+    #         last_action = last_action_batch[i]
+    #         if last_action != -1:
+    #             x, y = last_action // self.n, last_action % self.n
+    #             state2[i][0][x][y] = 1
 
-        res =  torch.cat((state0, state1, state2), dim=1)
-        # res = torch.cat((state0, state1), dim=1)
-        return res.cuda() if self.train_use_gpu else res
+    #     res =  torch.cat((state0, state1, state2), dim=1)
+    #     # res = torch.cat((state0, state1), dim=1)
+    #     return res.cuda() if self.train_use_gpu else res
 
     def set_learning_rate(self, lr):
         """set learning rate
@@ -270,10 +271,10 @@ class NeuralNetWorkWrapper():
 
         if self.libtorch_use_gpu:
             self.neural_network.cuda()
-            example = torch.rand(1, 3, self.n, self.n).cuda()
+            example = torch.rand(1, 4, self.n, self.n).cuda()
         else:
             self.neural_network.cpu()
-            example = torch.rand(1, 3, self.n, self.n).cpu()
+            example = torch.rand(1, 4, self.n, self.n).cpu()
 
         traced_script_module = torch.jit.trace(self.neural_network, example)
         traced_script_module.save(filepath)

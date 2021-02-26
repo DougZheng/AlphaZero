@@ -41,9 +41,9 @@ class MCTS {
 public:
     MCTS(size_t thread_num, int n_playout, double c_puct, double c_virtual_loss);
     int get_action(const Board &board);
-    std::pair<std::vector<double>, double> policy(Board &board);
+    virtual std::pair<std::vector<double>, double> policy(Board &board);
     void update_with_move(int last_action);
-    // void display(Node *root, const Board &board) const;
+    void display(Node *root, const Board &board) const;
 protected:
     void startup(const Board &board);
     static void tree_deleter(Node *root);
@@ -58,7 +58,7 @@ protected:
 class AlphaZero : public MCTS {
 public:
     AlphaZero(NeuralNetwork *neural_network, size_t thread_num, int n_playout, double c_puct, double c_virtual_loss);
-    std::pair<std::vector<double>, double> policy(const Board &board);
+    std::pair<std::vector<double>, double> policy(Board &board) override;
     std::vector<double> get_action_probs(const Board &board, double temp = 0.0);
 private:
     NeuralNetwork *neural_network;

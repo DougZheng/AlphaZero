@@ -13,7 +13,7 @@ void Board::exec_move(int x, int y) {
     states[x][y] = cur_player;
     cur_player = -cur_player;
     last_move = x * n + y;
-    ++cnt_move;
+    ++move_cnt;
     const static int dir[4][2] = {
         {0, 1}, {1, 0}, {1, 1}, {1, -1}
     };
@@ -62,7 +62,7 @@ int Board::get_board_size() const {
 }
 
 bool Board::get_is_tie() const {
-    return cnt_move == get_board_size();
+    return move_cnt == get_board_size();
 }
 
 void Board::display() const {
@@ -93,4 +93,21 @@ void Board::display() const {
         std::cout << "\n\n";
     }
     std::cout << std::setfill(' ') << std::endl;
+}
+
+std::vector<std::vector<std::vector<int>>> Board::get_encode_states() const {
+    std::vector<std::vector<std::vector<int>>> res(
+        4, std::vector<std::vector<int>>(n, std::vector<int>(n)));
+    int is_first = move_cnt % 2 == 0;
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            if (states[i][j] == 1) res[0][i][j] = 1;
+            else if(states[i][j] == -1) res[1][i][j] = 1;
+            res[3][i][j] = is_first;
+        }
+    }
+    if (last_move != -1) {
+        res[2][last_move / n][last_move % n] = 1;
+    }
+    return res;
 }
