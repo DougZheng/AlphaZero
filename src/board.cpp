@@ -1,4 +1,7 @@
 #include "board.h"
+#include <iostream>
+#include <iomanip>
+#include <utility>
 
 Board::Board(int n, int n_in_row, int cur_player) :
     n(n), n_in_row(n_in_row), cur_player(cur_player) {
@@ -14,7 +17,7 @@ void Board::exec_move(int x, int y) {
     cur_player = -cur_player;
     last_move = x * n + y;
     ++move_cnt;
-    const static int dir[4][2] = {
+    const static int dir[4][2] = { // check for four directions
         {0, 1}, {1, 0}, {1, 1}, {1, -1}
     };
     auto is_same = [&](int x, int y, int aim) {
@@ -29,12 +32,12 @@ void Board::exec_move(int x, int y) {
         while (is_same(x - step * dir[i][0], y - step * dir[i][1], states[x][y])) {
             ++step, ++len;
         }
-        if (len >= n_in_row) {
+        if (len >= n_in_row) { // if at least n pieces in a row
             result = std::make_pair(true, states[x][y]);
             return;
         }
     }
-    result = {get_is_tie(), 0};
+    result = {get_is_tie(), 0}; // tie or uncertain
 }
 
 std::vector<int> Board::get_moves() const {
@@ -42,7 +45,7 @@ std::vector<int> Board::get_moves() const {
     for (int i = 0; i < n; ++i) {
         for (int j = 0; j < n; ++j) {
             if (states[i][j] == 0) {
-                moves.emplace_back(i * n + j);
+                moves.emplace_back(i * n + j); // push available positions in orderj
             }
         }
     }
@@ -54,7 +57,7 @@ bool Board::is_legal(int pos) const {
 }
 
 bool Board::is_legal(int x, int y) const {
-    return states[x][y] == 0;
+    return x >= 0 && x < n && y >= 0 && y < n && states[x][y] == 0;
 }
 
 int Board::get_board_size() const {
@@ -65,6 +68,10 @@ bool Board::get_is_tie() const {
     return move_cnt == get_board_size();
 }
 
+/*
+    display the board state using stdout
+    the last move is marked in red
+*/
 void Board::display() const {
     int last_x = last_move != -1 ? last_move / n : n;
     int last_y = last_move != -1 ? last_move % n : n;
@@ -95,6 +102,13 @@ void Board::display() const {
     std::cout << std::setfill(' ') << std::endl;
 }
 
+/*
+    torch input states
+    0: board state of the first player
+    1: board state of the second player
+    2: board state of the last action
+    3: board state of whether takeing the first action
+*/
 std::vector<std::vector<std::vector<int>>> Board::get_encode_states() const {
     std::vector<std::vector<std::vector<int>>> res(
         4, std::vector<std::vector<int>>(n, std::vector<int>(n)));

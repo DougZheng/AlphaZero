@@ -1,7 +1,11 @@
 #include "neural_network.h"
+#include <utility>
 
 using namespace std::chrono_literals;
 
+/*
+    in torch1.2.0, module is ref instead of ptr
+*/
 NeuralNetwork::NeuralNetwork(std::string model_path, bool use_gpu, unsigned batch_size) :
     module(torch::jit::load(model_path.c_str())), use_gpu(use_gpu), batch_size(batch_size), 
     running(true), loop(nullptr) {
@@ -29,6 +33,7 @@ std::future<NeuralNetwork::return_type> NeuralNetwork::commit(const Board &board
             states1D.insert(states1D.end(), vc2.cbegin(), vc2.cend());
         }
     }
+    // get input states
     torch::Tensor states = torch::from_blob(&states1D[0], {1, 4, n, n}, 
         torch::dtype(torch::kInt32)).toType(torch::kFloat32);
     std::promise<return_type> promise;
@@ -64,10 +69,13 @@ void NeuralNetwork::infer() {
     if (states.empty()) {
         return;
     }
+    // prepare input
     std::vector<torch::jit::IValue> inputs{
         use_gpu ? torch::cat(states, 0).to(at::kCUDA) : torch::cat(states, 0)
     };
+    // get result from nn
     auto res = module.forward(inputs).toTuple();
+    // log_softmax probability, so exp() is needed
     torch::Tensor p_batch = res->elements()[0].toTensor().exp().toType(torch::kFloat32).to(at::kCPU);
     torch::Tensor v_batch = res->elements()[1].toTensor().toType(torch::kFloat32).to(at::kCPU);
     for (unsigned i = 0; i < promises.size(); ++i) {

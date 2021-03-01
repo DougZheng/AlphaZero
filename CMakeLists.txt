@@ -1,39 +1,32 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.8.0)
 PROJECT(AlphaZero_Gomoku)
 
-# torch
-SET(Torch_DIR /home/zbs/anaconda3/envs/AlphaZero/lib/python3.7/site-packages/torch/share/cmake/Torch)
+# find torch package
+# use this statement to set your Torch_DIR 
+SET(Torch_DIR ~/anaconda3/envs/AlphaZero/lib/python3.7/site-packages/torch/share/cmake/Torch)
 FIND_PACKAGE(Torch REQUIRED)
-# INCLUDE_DIRECTORIES(/home/zbs/anaconda3/envs/AlphaZero/lib/python3.7/site-packages/torch/include)
-MESSAGE(STATUS "TORCH_INCLUDE_PATH="${TORCH_INCLUDE_PATH})
 MESSAGE(STATUS "TORCH_LIBRARIES="${TORCH_LIBRARIES})
 
-# python
+# find python package
 FIND_PACKAGE(PythonLibs)
 INCLUDE_DIRECTORIES(${PYTHON_INCLUDE_PATH})
 MESSAGE(STATUS "PYTHON_INCLUDE_PATH="${PYTHON_INCLUDE_PATH})
 MESSAGE(STATUS "PYTHON_LIBRARIES="${PYTHON_LIBRARIES})
 
-# swig
+# find swig package
 FIND_PACKAGE(SWIG REQUIRED)
 INCLUDE(${SWIG_USE_FILE})
 MESSAGE(STATUS "SWIG_USE_FILE="${SWIG_USE_FILE})
 
-# 设置编译参数
+# cpp compile flags
 SET(CMAKE_CXX_FLAGS "-std=c++14 -pthread -O3")
 
-# 包含源文件
+# include source file
 INCLUDE_DIRECTORIES(${PROJECT_SOURCE_DIR}/src)
 AUX_SOURCE_DIRECTORY(${PROJECT_SOURCE_DIR}/src DIR_SRCS)
 
-# 设置可执行文件输出目录
+# output executable file to this path
 SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/bin)
-
-# 生成可执行文件
-# add_executable(${PROJECT_NAME} ${DIR_SRCS})
-
-# target_link_libraries(${PROJECT_NAME} "${TORCH_LIBRARIES}")
-# set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 11)
 
 # swig
 SET_PROPERTY(SOURCE ${PROJECT_SOURCE_DIR}/src/library.i PROPERTY CPLUSPLUS ON)

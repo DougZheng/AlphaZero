@@ -1,30 +1,51 @@
 #include "mcts.h"
+#include <iostream>
+#include <cfloat>
+#include <cmath>
+#include <algorithm>
+#include <utility>
+#include <random>
+#include <future>
 
 Node::Node(Node *parent = nullptr, double p_sa = 1.0, int action = -1) : 
     parent(parent), p_sa(p_sa), action(action) { }
 
+/*
+    expand a leaf node
+    param action is all legal actions can be taken
+*/
 void Node::expand(const std::vector<double> &action_priors, const std::vector<int> &actions) {
-    if (!is_parent.exchange(true)) {
-        children.reserve(actions.size());
+    if (!is_parent.exchange(true)) { // if not been expanded
+        children.reserve(actions.size()); 
         for (const auto &action : actions) {
             children.emplace_back(new Node(this, action_priors[action], action));
         }
-        is_leaf.store(false);
+        is_leaf.store(false); // expand finished
     }
 }
 
+/*
+    propagate value from leaf to root
+    update n_visit and q_sa 
+*/
 void Node::backup(double value) {
     if (parent != nullptr) {
-        parent->backup(-value);
+        parent->backup(-value); // -value for the opposite player
     }
     --virtual_loss;
     unsigned n_visit = ++this->n_visit;
-    {
+
+    // simple mutex, have not consider the consistency of q_sa and n_visit
+    // the side effect can be ignored
+    { 
         std::lock_guard<std::mutex> lock(mutex_val);
         q_sa = ((n_visit - 1) * q_sa + value) / n_visit;
     }
 }
 
+/*
+    select the next action
+*/
 Node* Node::select(double c_puct, double c_virtual_loss) {
     auto res = *max_element(children.begin(), children.end(), 
         [&](const Node *a, const Node *b) {
@@ -34,6 +55,9 @@ Node* Node::select(double c_puct, double c_virtual_loss) {
     return res;
 }
 
+/*
+    evaluate an action
+*/
 double Node::get_value(double c_puct, double c_virtual_loss) const {
     unsigned n_visit = this->n_visit.load();
     double u_sa = c_puct * p_sa * sqrt(parent->n_visit.load()) / (1 + n_visit);
@@ -54,6 +78,10 @@ void MCTS::tree_deleter(Node *root) {
     root = nullptr;
 }
 
+/*
+    simulation from root to leaf
+    copy of board is needed
+*/
 void MCTS::playout(Board board) {
     Node *cur = root.get();
     while (!cur->get_is_leaf()) {
@@ -61,10 +89,12 @@ void MCTS::playout(Board board) {
         board.exec_move(cur->action);
     }
     auto res = board.get_result();
-    if (!res.first) {
+    if (!res.first) { // if not ended
         auto actions = board.get_moves();
         auto pi = policy(board);
         cur->expand(pi.first, actions);
+        // you may feel confused about the negative sign
+        // recall that from parent's perspective, this cur node is represent for the oppoent
         cur->backup(-pi.second);
     }
     else {
@@ -73,6 +103,9 @@ void MCTS::playout(Board board) {
     }
 }
 
+/*
+    get action, take action greedily 
+*/
 int MCTS::get_action(const Board &board) {
     startup(board);
     return (*max_element(root->children.cbegin(), root->children.cend(), 
@@ -81,24 +114,36 @@ int MCTS::get_action(const Board &board) {
         }))->action;
 }
 
+/*
+    helper function
+    start up all simulations
+*/
 void MCTS::startup(const Board &board) {
-    int n_need = n_playout - root->n_visit;
-    // std::cout << "need " << n_need << " playouts" << std::endl;
+    int n_need = n_playout - root->n_visit; // reuse the previous result
     std::vector<std::future<void>> futures;
     futures.reserve(n_need);
+    // commit all simulation tasks
     for (int i = 0; i < n_need; ++i) {
         auto future = thread_pool->commit(std::bind(&MCTS::playout, this, board));
         futures.emplace_back(std::move(future));
     }
+    // wait for all tasks finished
     for (int i = 0; i < futures.size(); ++i) {
         futures[i].wait();
     }
 }
 
+/*
+    naive policy, using rollout
+    it is O(board_size), efficient enough
+    return (action_priors, value)
+*/
 std::pair<std::vector<double>, double> MCTS::policy(Board &board) {
     auto actions = board.get_moves();
-    std::vector<double> action_probs(board.get_board_size(), 1.0 / actions.size());
+    // each action is taken in equal probability
+    std::vector<double> action_priors(board.get_board_size(), 1.0 / actions.size());
     int player = board.get_cur_player();
+    // take action randomly
     std::random_shuffle(actions.begin(), actions.end());
     std::pair<bool, int> res;
     for (const auto &act : actions) {
@@ -107,9 +152,13 @@ std::pair<std::vector<double>, double> MCTS::policy(Board &board) {
         if (res.first) break;
     }
     double value = res.second == 0 ? 0 : res.second == player ? 1 : -1;
-    return std::make_pair(action_probs, value);
+    return std::make_pair(action_priors, value);
 }
 
+/*
+    update with the oppoent's move 
+    reuse the tree instead of destroying it directly 
+*/
 void MCTS::update_with_move(int last_action) {
     for (auto it = root->children.begin(); it != root->children.end(); ++it) {
         if ((*it)->action == last_action) {
@@ -120,57 +169,42 @@ void MCTS::update_with_move(int last_action) {
             return;
         }
     }
+    // if there is not such action, reset the tree
     root.reset(new Node());
-}
-
-void MCTS::display(Node *root, const Board &board) const {
-    // int n = board.get_n();
-    // using tridouble = std::tuple<double, double, double>;
-    // std::vector<std::vector<tridouble>> priors(n, std::vector<tridouble>(n));
-    // for (const auto &child : root->children) {
-    //     priors[child->action / n][child->action % n] = std::make_tuple(
-    //         1.0 * child->n_visit / root->n_visit,
-    //         child->q_sa,
-    //         child->get_value(c_puct, c_virtual_loss));
-    // }
-    // std::cout << std::fixed << std::setprecision(2);
-    // std::cout << std::endl;
-    // for (int i = 0; i < n; ++i) {
-    //     for (int j = 0; j < n; ++j) {
-    //         std::cout << std::get<0>(priors[i][j]) 
-    //         << "(" << std::showpos << std::get<1>(priors[i][j]) << ","
-    //         << std::get<2>(priors[i][j]) << ")"
-    //         << std::noshowpos << " \n"[j == n - 1];
-    //     }
-    // }
-    // std::cout << std::endl;
 }
 
 AlphaZero::AlphaZero(NeuralNetwork *neural_network, size_t thread_num, int n_playout, double c_puct, double c_virtual_loss) : 
     MCTS(thread_num, n_playout, c_puct, c_virtual_loss), neural_network(neural_network) { }
 
+/*
+    AlphaZero's policy, using neural network
+*/
 std::pair<std::vector<double>, double> AlphaZero::policy(Board &board) {
     auto future = neural_network->commit(board);
     auto result = future.get();
     double value = result[1][0];
     auto action_priors = std::move(result[0]);
     double sum = std::accumulate(action_priors.cbegin(), action_priors.cend(), 0.0);
-    if (sum < 1e-3) {
-        std::cout << "Warning: no valid move." << std::endl;
+    if (sum < FLT_EPSILON) {
+        std::cerr << "Warning: no valid move." << std::endl;
         std::for_each(action_priors.begin(), action_priors.end(), 
             [sum](double &x) { x /= sum; });
     }
     else {
+        // normalization
         std::for_each(action_priors.begin(), action_priors.end(), 
             [sum](double &x) { x /= sum; });
     }
     return std::make_pair(action_priors, value);
 }
 
+/*
+    get action probs
+*/
 std::vector<double> AlphaZero::get_action_probs(const Board &board, double temp) {
     startup(board);
     std::vector<double> action_probs(board.get_board_size(), 0.0);
-    if (temp < 1e-3) {
+    if (temp < FLT_EPSILON) { // greedy
         int action = (*max_element(root->children.cbegin(), root->children.cend(), 
             [](const Node *a, const Node *b) {
                 return a->n_visit < b->n_visit;
@@ -179,10 +213,12 @@ std::vector<double> AlphaZero::get_action_probs(const Board &board, double temp)
     }
     else {
         double sum = 0;
+        // p:=p^(1/temp)
         for (const auto &child : root->children) {
             action_probs[child->action] = std::pow(child->n_visit.load(), 1.0 / temp);
             sum += action_probs[child->action];
         }
+        // normalization
         std::for_each(action_probs.begin(), action_probs.end(), 
             [sum](double &x) { x /= sum; });
     }

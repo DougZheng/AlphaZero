@@ -12,19 +12,19 @@ import torch.nn.functional as F
 import numpy as np
 
 
-def conv3x3(in_channels, out_channels, stride=1):
+def conv3x3(in_channels, out_channels, stride = 1):
     # 3x3 convolution
-    return nn.Conv2d(in_channels, out_channels, kernel_size=3,
-                     stride=stride, padding=1, bias=False)
+    return nn.Conv2d(in_channels, out_channels, kernel_size = 3,
+                     stride = stride, padding = 1, bias = False)
 
 
 class ResidualBlock(nn.Module):
     # Residual block
-    def __init__(self, in_channels, out_channels, stride=1):
+    def __init__(self, in_channels, out_channels, stride = 1):
         super(ResidualBlock, self).__init__()
         self.conv1 = conv3x3(in_channels, out_channels, stride)
         self.bn1 = nn.BatchNorm2d(out_channels)
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.ReLU(inplace = True)
 
         self.conv2 = conv3x3(out_channels, out_channels)
         self.bn2 = nn.BatchNorm2d(out_channels)
@@ -64,16 +64,16 @@ class NeuralNetWork(nn.Module):
         self.res_layers = nn.Sequential(*res_list)
 
         # policy head
-        self.p_conv = nn.Conv2d(num_channels, 4, kernel_size=1, padding=0, bias=False)
-        self.p_bn = nn.BatchNorm2d(num_features=4)
-        self.relu = nn.ReLU(inplace=True)
+        self.p_conv = nn.Conv2d(num_channels, 4, kernel_size = 1, padding = 0, bias = False)
+        self.p_bn = nn.BatchNorm2d(num_features = 4)
+        self.relu = nn.ReLU(inplace = True)
 
         self.p_fc = nn.Linear(4 * n ** 2, action_size)
-        self.log_softmax = nn.LogSoftmax(dim=1)
+        self.log_softmax = nn.LogSoftmax(dim = 1)
 
         # value head
-        self.v_conv = nn.Conv2d(num_channels, 2, kernel_size=1, padding=0, bias=False)
-        self.v_bn = nn.BatchNorm2d(num_features=2)
+        self.v_conv = nn.Conv2d(num_channels, 2, kernel_size = 1, padding = 0, bias = False)
+        self.v_bn = nn.BatchNorm2d(num_features = 2)
 
         self.v_fc1 = nn.Linear(2 * n ** 2, 256)
         self.v_fc2 = nn.Linear(256, 1)
@@ -130,7 +130,7 @@ class NeuralNetWorkWrapper():
     """train and predict
     """
 
-    def __init__(self, lr, l2, num_layers, num_channels, n, action_size, train_use_gpu=True, libtorch_use_gpu=True):
+    def __init__(self, lr, l2, num_layers, num_channels, n, action_size, train_use_gpu = False, libtorch_use_gpu = False):
         """ init
         """
         self.lr = lr
@@ -145,7 +145,7 @@ class NeuralNetWorkWrapper():
         if self.train_use_gpu:
             self.neural_network.cuda()
 
-        self.optim = Adam(self.neural_network.parameters(), lr=self.lr, weight_decay=self.l2)
+        self.optim = Adam(self.neural_network.parameters(), lr = self.lr, weight_decay = self.l2)
         self.alpha_loss = AlphaLoss()
 
     def train(self, example_buffer, batch_size, epochs):
@@ -159,9 +159,6 @@ class NeuralNetWorkWrapper():
             train_data = random.sample(example_buffer, batch_size)
 
             # extract train data
-            # board_batch, last_action_batch, cur_player_batch, p_batch, v_batch = list(zip(*train_data))
-
-            # state_batch = self._data_convert(board_batch, last_action_batch, cur_player_batch)
             state_batch, p_batch, v_batch = list(zip(*train_data))
             state_batch = torch.Tensor(state_batch).cuda() if self.train_use_gpu else torch.Tensor(state_batch)
             p_batch = torch.Tensor(p_batch).cuda() if self.train_use_gpu else torch.Tensor(p_batch)
@@ -182,24 +179,12 @@ class NeuralNetWorkWrapper():
             new_p, _ = self._infer(state_batch)
 
             entropy = -np.mean(
-                np.sum(new_p * np.log(new_p + 1e-10), axis=1)
+                np.sum(new_p * np.log(new_p + 1e-10), axis = 1)
             )
 
             res.append((epo, loss.item(), entropy))
 
         return res
-
-    # def infer(self, feature_batch):
-    #     """predict p and v by raw input
-    #        return numpy
-    #     """
-    #     board_batch, last_action_batch, cur_player_batch = list(zip(*feature_batch))
-    #     states = self._data_convert(board_batch, last_action_batch, cur_player_batch)
-
-    #     self.neural_network.eval()
-    #     log_ps, vs = self.neural_network(states)
-
-    #     return np.exp(log_ps.cpu().detach().numpy()), vs.cpu().detach().numpy()
 
     def _infer(self, state_batch):
         """predict p and v by state
@@ -211,33 +196,6 @@ class NeuralNetWorkWrapper():
 
         return np.exp(log_ps.cpu().detach().numpy()), vs.cpu().detach().numpy()
 
-    # def _data_convert(self, board_batch, last_action_batch, cur_player_batch):
-    #     """convert data format
-    #        return tensor
-    #     """
-    #     n = self.n
-
-    #     board_batch = torch.Tensor(board_batch).unsqueeze(1)
-    #     state0 = (board_batch > 0).float()
-    #     state1 = (board_batch < 0).float()
-
-    #     state2 = torch.zeros((len(last_action_batch), 1, n, n)).float()
-
-    #     for i in range(len(board_batch)):
-    #         if cur_player_batch[i] == -1:
-    #             temp = state0[i].clone()
-    #             state0[i].copy_(state1[i])
-    #             state1[i].copy_(temp)
-
-    #         last_action = last_action_batch[i]
-    #         if last_action != -1:
-    #             x, y = last_action // self.n, last_action % self.n
-    #             state2[i][0][x][y] = 1
-
-    #     res =  torch.cat((state0, state1, state2), dim=1)
-    #     # res = torch.cat((state0, state1), dim=1)
-    #     return res.cuda() if self.train_use_gpu else res
-
     def set_learning_rate(self, lr):
         """set learning rate
         """
@@ -245,7 +203,7 @@ class NeuralNetWorkWrapper():
         for param_group in self.optim.param_groups:
             param_group['lr'] = lr
 
-    def load_model(self, folder="models", filename="checkpoint"):
+    def load_model(self, folder = "models", filename = "checkpoint"):
         """load model from file
         """
 
@@ -254,7 +212,7 @@ class NeuralNetWorkWrapper():
         self.neural_network.load_state_dict(state['network'])
         self.optim.load_state_dict(state['optim'])
 
-    def save_model(self, folder="models", filename="checkpoint"):
+    def save_model(self, folder = "models", filename = "checkpoint"):
         """save model to file
         """
 
@@ -262,7 +220,7 @@ class NeuralNetWorkWrapper():
             os.mkdir(folder)
 
         filepath = os.path.join(folder, filename)
-        state = {'network':self.neural_network.state_dict(), 'optim':self.optim.state_dict()}
+        state = {'network' : self.neural_network.state_dict(), 'optim' : self.optim.state_dict()}
         torch.save(state, filepath)
 
         # save torchscript
